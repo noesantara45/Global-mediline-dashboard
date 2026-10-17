@@ -1,5 +1,6 @@
 <?php
-$text = <<<EOT
+
+$text = <<<'EOT'
 OKA WAHYU SABARUDIN, BAPAK Tgl Faktur
 
 19 Nop 2025
@@ -19,23 +20,23 @@ $invoiceKeyword = 'No. Faktur';
 $dateKeyword = 'Tgl Faktur';
 $totalKeyword = 'Total Faktur';
 
-$pattern1 = '/' . preg_quote($invoiceKeyword, '/') . '[\s\W]*([A-Za-z0-9\-\/]+)/i';
+$pattern1 = '/'.preg_quote($invoiceKeyword, '/').'[\s\W]*([A-Za-z0-9\-\/]+)/i';
 if (preg_match($pattern1, $text, $matches)) {
-    echo "Invoice: " . trim($matches[1]) . "\n";
+    echo 'Invoice: '.trim($matches[1])."\n";
 } else {
     echo "Invoice pattern failed\n";
 }
 
-$pattern2 = '/' . preg_quote($dateKeyword, '/') . '[\s\W]*([0-9]{1,2}\s+[a-zA-Z]+\s+[0-9]{4}|[\d\/\-]+)/i';
+$pattern2 = '/'.preg_quote($dateKeyword, '/').'[\s\W]*([0-9]{1,2}\s+[a-zA-Z]+\s+[0-9]{4}|[\d\/\-]+)/i';
 if (preg_match($pattern2, $text, $matches)) {
-    echo "Date: " . trim($matches[1]) . "\n";
+    echo 'Date: '.trim($matches[1])."\n";
 } else {
     echo "Date pattern failed\n";
 }
 
-$pattern3 = '/' . preg_quote($totalKeyword, '/') . '[\s\W]*((?:Rp)?\s*[\d\.\,]+)/i';
+$pattern3 = '/'.preg_quote($totalKeyword, '/').'[\s\W]*((?:Rp)?\s*[\d\.\,]+)/i';
 if (preg_match($pattern3, $text, $matches)) {
-    echo "Total: " . trim($matches[1]) . "\n";
+    echo 'Total: '.trim($matches[1])."\n";
 } else {
     echo "Total pattern failed\n";
 }

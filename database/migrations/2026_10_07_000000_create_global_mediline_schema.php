@@ -31,13 +31,13 @@ return new class extends Migration
             $table->text('address')->nullable();
             $table->string('tax_id')->nullable()->comment('NPWP');
             $table->integer('top_days')->default(0)->comment('Term of Payment in days');
-            
+
             // OCR Template Settings
             $table->string('ocr_invoice_keyword')->nullable();
             $table->string('ocr_date_keyword')->nullable();
             $table->string('ocr_subtotal_keyword')->nullable();
             $table->string('ocr_total_keyword')->nullable();
-            
+
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });

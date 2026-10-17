@@ -3,22 +3,22 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\OutboundInvoiceResource\Pages;
-use App\Filament\Resources\OutboundInvoiceResource\RelationManagers;
 use App\Models\OutboundInvoice;
+use App\Models\Product;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class OutboundInvoiceResource extends Resource
 {
     protected static ?string $model = OutboundInvoice::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-arrow-up';
+
     protected static ?string $navigationGroup = 'Transactions';
+
     protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
@@ -34,16 +34,16 @@ class OutboundInvoiceResource extends Resource
                             ->live()
                             ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state) {
                                 // Auto set dates when client is selected
-                                if (!$get('issue_date')) {
+                                if (! $get('issue_date')) {
                                     $set('issue_date', now()->format('Y-m-d'));
                                 }
-                                if (!$get('due_date')) {
+                                if (! $get('due_date')) {
                                     // Default due date +30 days
                                     $set('due_date', now()->addDays(30)->format('Y-m-d'));
                                 }
                                 // Auto generate invoice number JL-YMD-RAND
-                                if (!$get('invoice_number')) {
-                                    $set('invoice_number', 'JL' . now()->format('ymd') . rand(10, 99));
+                                if (! $get('invoice_number')) {
+                                    $set('invoice_number', 'JL'.now()->format('ymd').rand(10, 99));
                                 }
                             }),
                         Forms\Components\TextInput::make('invoice_number')
@@ -75,14 +75,16 @@ class OutboundInvoiceResource extends Resource
                             ->schema([
                                 Forms\Components\Select::make('item_name')
                                     ->label('Nama Barang')
-                                    ->options(\App\Models\Product::pluck('name', 'name'))
+                                    ->options(Product::pluck('name', 'name'))
                                     ->searchable()
                                     ->required()
                                     ->live()
                                     ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state) {
-                                        if (!$state) return;
-                                        
-                                        $product = \App\Models\Product::where('name', $state)->first();
+                                        if (! $state) {
+                                            return;
+                                        }
+
+                                        $product = Product::where('name', $state)->first();
                                         if ($product) {
                                             $set('unit', $product->unit);
                                             $set('unit_price', $product->price);
@@ -161,7 +163,7 @@ class OutboundInvoiceResource extends Resource
         $qty = (float) $get('quantity') ?: 0;
         $price = (float) $get('unit_price') ?: 0;
         $discount = (float) $get('discount_percentage') ?: 0;
-        
+
         $subtotal = $qty * $price * (1 - ($discount / 100));
         $set('subtotal', round($subtotal));
     }
@@ -170,15 +172,15 @@ class OutboundInvoiceResource extends Resource
     {
         $items = $get('items') ?? [];
         $subtotalAmount = 0;
-        
+
         foreach ($items as $item) {
             $subtotalAmount += (float) ($item['subtotal'] ?? 0);
         }
-        
+
         $taxPercentage = (float) ($get('tax_percentage') ?? 11);
         $taxAmount = $subtotalAmount * ($taxPercentage / 100);
         $totalAmount = $subtotalAmount + $taxAmount;
-        
+
         $set('subtotal_amount', round($subtotalAmount));
         $set('tax_amount', round($taxAmount));
         $set('total_amount', round($totalAmount));
