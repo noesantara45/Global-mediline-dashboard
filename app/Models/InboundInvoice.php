@@ -12,4 +12,9 @@ class InboundInvoice extends Model
     {
         return $this->belongsTo(Supplier::class);
     }
+
+    public function items()
+    {
+        return $this->hasMany(InboundInvoiceItem::class);
+    }
 }

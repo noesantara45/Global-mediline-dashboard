@@ -3,41 +3,86 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\ProductResource\Pages;
-use App\Filament\Resources\ProductResource\RelationManagers;
 use App\Models\Product;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Str;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class ProductResource extends Resource
 {
     protected static ?string $model = Product::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-cube';
+
     protected static ?string $navigationGroup = 'Master Data';
+
     protected static ?int $navigationSort = 1;
+
+    protected static ?string $modelLabel = 'Produk';
+
+    protected static ?string $pluralModelLabel = 'Produk';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('name')
-                    ->label('Nama Barang')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('unit')
-                    ->label('Satuan')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('price')
-                    ->label('Harga Satuan')
-                    ->required()
-                    ->numeric()
-                    ->prefix('Rp'),
+                Forms\Components\Section::make('Informasi Produk')
+                    ->schema([
+                        Forms\Components\Grid::make(2)
+                            ->schema([
+                                Forms\Components\TextInput::make('name')
+                                    ->label('Nama Barang / Produk')
+                                    ->required()
+                                    ->maxLength(255),
+
+                                Forms\Components\TextInput::make('brand')
+                                    ->label('Merek / Brand')
+                                    ->placeholder('Contoh: MERCK, SD Biosensor, dll.')
+                                    ->maxLength(255),
+                            ]),
+
+                        Forms\Components\Grid::make(2)
+                            ->schema([
+                                Forms\Components\TextInput::make('unit')
+                                    ->label('Satuan')
+                                    ->default('Pcs')
+                                    ->required()
+                                    ->maxLength(255),
+
+                                Forms\Components\TextInput::make('price')
+                                    ->label('Harga Satuan')
+                                    ->required()
+                                    ->numeric()
+                                    ->prefix('Rp')
+                                    ->default(0),
+                            ]),
+
+                        Forms\Components\Textarea::make('description')
+                            ->label('Keterangan / Deskripsi')
+                            ->placeholder('Masukkan keterangan atau spesifikasi produk...')
+                            ->rows(4)
+                            ->columnSpanFull(),
+
+                        Forms\Components\FileUpload::make('photo')
+                            ->label('Foto Produk')
+                            ->image()
+                            ->disk('public')
+                            ->directory('products')
+                            ->getUploadedFileNameForStorageUsing(
+                                function (Forms\Get $get, TemporaryUploadedFile $file): string {
+                                    $productName = $get('name');
+                                    $slug = ! empty($productName) ? Str::slug($productName) : 'product';
+
+                                    return $slug.'.'.$file->getClientOriginalExtension();
+                                }
+                            )
+                            ->imageEditor()
+                            ->columnSpanFull(),
+                    ]),
             ]);
     }
 
@@ -45,24 +90,50 @@ class ProductResource extends Resource
     {
         return $table
             ->columns([
+                Tables\Columns\ImageColumn::make('photo')
+                    ->label('Foto')
+                    ->disk('public')
+                    ->square(),
+
                 Tables\Columns\TextColumn::make('name')
                     ->label('Nama Barang')
                     ->searchable()
+                    ->sortable()
+                    ->weight('bold'),
+
+                Tables\Columns\TextColumn::make('brand')
+                    ->label('Merek')
+                    ->badge()
+                    ->color('gray')
+                    ->searchable()
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('description')
+                    ->label('Keterangan')
+                    ->limit(50)
+                    ->tooltip(fn ($record): ?string => $record->description)
+                    ->searchable(),
+
                 Tables\Columns\TextColumn::make('unit')
                     ->label('Satuan')
+                    ->badge()
                     ->searchable(),
+
                 Tables\Columns\TextColumn::make('price')
                     ->label('Harga Satuan')
                     ->numeric()
                     ->sortable()
                     ->prefix('Rp '),
+
                 Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Dibuat Pada')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
                 Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
+                    ->label('Diperbarui Pada')
+                    ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -71,6 +142,7 @@ class ProductResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

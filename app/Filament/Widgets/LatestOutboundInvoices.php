@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Models\OutboundInvoice;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -9,13 +10,14 @@ use Filament\Widgets\TableWidget as BaseWidget;
 class LatestOutboundInvoices extends BaseWidget
 {
     protected static ?string $heading = 'Faktur Penjualan Terbaru';
-    protected int | string | array $columnSpan = 'full';
+
+    protected int|string|array $columnSpan = 'full';
 
     public function table(Table $table): Table
     {
         return $table
             ->query(
-                \App\Models\OutboundInvoice::query()->latest('created_at')->limit(5)
+                OutboundInvoice::query()->latest('created_at')->limit(5)
             )
             ->columns([
                 Tables\Columns\TextColumn::make('invoice_number')
@@ -39,7 +41,7 @@ class LatestOutboundInvoices extends BaseWidget
                     ->label('Cetak PDF')
                     ->icon('heroicon-o-printer')
                     ->color('success')
-                    ->url(fn (\App\Models\OutboundInvoice $record): string => url('/print/outbound-invoice/' . $record->id))
+                    ->url(fn (OutboundInvoice $record): string => url('/print/outbound-invoice/'.$record->id))
                     ->openUrlInNewTab(),
             ]);
     }

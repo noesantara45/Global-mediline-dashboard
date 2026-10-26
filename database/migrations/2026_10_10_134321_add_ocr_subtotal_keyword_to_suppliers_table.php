@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('suppliers', function (Blueprint $table) {
-            $table->string('ocr_subtotal_keyword')->nullable()->after('ocr_date_keyword');
-        });
+        if (! Schema::hasColumn('suppliers', 'ocr_subtotal_keyword')) {
+            Schema::table('suppliers', function (Blueprint $table) {
+                $table->string('ocr_subtotal_keyword')->nullable()->after('ocr_date_keyword');
+            });
+        }
     }
 
     /**
@@ -21,8 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('suppliers', function (Blueprint $table) {
-            $table->dropColumn('ocr_subtotal_keyword');
-        });
+        if (Schema::hasColumn('suppliers', 'ocr_subtotal_keyword')) {
+            Schema::table('suppliers', function (Blueprint $table) {
+                $table->dropColumn('ocr_subtotal_keyword');
+            });
+        }
     }
 };

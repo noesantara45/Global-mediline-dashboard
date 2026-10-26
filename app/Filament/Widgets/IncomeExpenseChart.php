@@ -2,7 +2,12 @@
 
 namespace App\Filament\Widgets;
 
+use App\Models\InboundInvoice;
+use App\Models\OutboundInvoice;
+use Carbon\Carbon;
 use Filament\Widgets\ChartWidget;
+use Flowframe\Trend\Trend;
+use Flowframe\Trend\TrendValue;
 
 class IncomeExpenseChart extends ChartWidget
 {
@@ -10,13 +15,13 @@ class IncomeExpenseChart extends ChartWidget
 
     protected function getData(): array
     {
-        $outboundData = \Flowframe\Trend\Trend::model(\App\Models\OutboundInvoice::class)
+        $outboundData = Trend::model(OutboundInvoice::class)
             ->dateColumn('issue_date')
             ->between(start: now()->startOfYear(), end: now()->endOfYear())
             ->perMonth()
             ->sum('total_amount');
-            
-        $inboundData = \Flowframe\Trend\Trend::model(\App\Models\InboundInvoice::class)
+
+        $inboundData = Trend::model(InboundInvoice::class)
             ->dateColumn('issue_date')
             ->between(start: now()->startOfYear(), end: now()->endOfYear())
             ->perMonth()
@@ -26,16 +31,16 @@ class IncomeExpenseChart extends ChartWidget
             'datasets' => [
                 [
                     'label' => 'Pemasukan (Outbound)',
-                    'data' => $outboundData->map(fn (\Flowframe\Trend\TrendValue $value) => $value->aggregate),
+                    'data' => $outboundData->map(fn (TrendValue $value) => $value->aggregate),
                     'backgroundColor' => '#2E8B57', // Green
                 ],
                 [
                     'label' => 'Pengeluaran (Inbound)',
-                    'data' => $inboundData->map(fn (\Flowframe\Trend\TrendValue $value) => $value->aggregate),
+                    'data' => $inboundData->map(fn (TrendValue $value) => $value->aggregate),
                     'backgroundColor' => '#E3342F', // Red
                 ],
             ],
-            'labels' => $outboundData->map(fn (\Flowframe\Trend\TrendValue $value) => \Carbon\Carbon::parse($value->date)->format('M Y')),
+            'labels' => $outboundData->map(fn (TrendValue $value) => Carbon::parse($value->date)->format('M Y')),
         ];
     }
 
