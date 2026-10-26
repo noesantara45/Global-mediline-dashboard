@@ -9,6 +9,8 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class ProductResource extends Resource
 {
@@ -30,10 +32,18 @@ class ProductResource extends Resource
             ->schema([
                 Forms\Components\Section::make('Informasi Produk')
                     ->schema([
-                        Forms\Components\TextInput::make('name')
-                            ->label('Nama Barang / Produk')
-                            ->required()
-                            ->maxLength(255),
+                        Forms\Components\Grid::make(2)
+                            ->schema([
+                                Forms\Components\TextInput::make('name')
+                                    ->label('Nama Barang / Produk')
+                                    ->required()
+                                    ->maxLength(255),
+
+                                Forms\Components\TextInput::make('brand')
+                                    ->label('Merek / Brand')
+                                    ->placeholder('Contoh: MERCK, SD Biosensor, dll.')
+                                    ->maxLength(255),
+                            ]),
 
                         Forms\Components\Grid::make(2)
                             ->schema([
@@ -62,6 +72,14 @@ class ProductResource extends Resource
                             ->image()
                             ->disk('public')
                             ->directory('products')
+                            ->getUploadedFileNameForStorageUsing(
+                                function (Forms\Get $get, TemporaryUploadedFile $file): string {
+                                    $productName = $get('name');
+                                    $slug = ! empty($productName) ? Str::slug($productName) : 'product';
+
+                                    return $slug.'.'.$file->getClientOriginalExtension();
+                                }
+                            )
                             ->imageEditor()
                             ->columnSpanFull(),
                     ]),
@@ -82,6 +100,13 @@ class ProductResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
+
+                Tables\Columns\TextColumn::make('brand')
+                    ->label('Merek')
+                    ->badge()
+                    ->color('gray')
+                    ->searchable()
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('description')
                     ->label('Keterangan')

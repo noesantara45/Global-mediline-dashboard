@@ -11,6 +11,7 @@ class Product extends Model
 
     protected $fillable = [
         'name',
+        'brand',
         'photo',
         'description',
         'unit',
@@ -20,4 +21,14 @@ class Product extends Model
     protected $casts = [
         'price' => 'decimal:2',
     ];
+
+    public function outboundItems()
+    {
+        return $this->hasMany(OutboundInvoiceItem::class, 'item_name', 'name');
+    }
+
+    public function inboundItems()
+    {
+        return $this->hasMany(InboundInvoiceItem::class, 'item_name', 'name');
+    }
 }

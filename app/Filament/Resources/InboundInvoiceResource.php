@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\InboundInvoiceResource\Pages;
 use App\Models\InboundInvoice;
+use App\Models\Product;
 use App\Models\Supplier;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -133,6 +134,61 @@ class InboundInvoiceResource extends Resource
                             }),
                     ])->columns(2),
 
+                Forms\Components\Section::make('Daftar Barang Pembelian (Items)')
+                    ->schema([
+                        Forms\Components\Repeater::make('items')
+                            ->relationship('items')
+                            ->schema([
+                                Forms\Components\Select::make('item_name')
+                                    ->label('Nama Barang')
+                                    ->options(Product::pluck('name', 'name'))
+                                    ->searchable()
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state) {
+                                        if (! $state) {
+                                            return;
+                                        }
+
+                                        $product = Product::where('name', $state)->first();
+                                        if ($product) {
+                                            $set('unit', $product->unit);
+                                            $set('unit_price', $product->price);
+                                            self::updateItemSubtotal($set, $get);
+                                        }
+                                    })
+                                    ->columnSpan(4),
+                                Forms\Components\TextInput::make('quantity')
+                                    ->label('Qty')
+                                    ->numeric()
+                                    ->default(1)
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::updateItemSubtotal($set, $get))
+                                    ->columnSpan(2),
+                                Forms\Components\TextInput::make('unit')
+                                    ->label('Satuan')
+                                    ->default('Pcs')
+                                    ->columnSpan(1),
+                                Forms\Components\TextInput::make('unit_price')
+                                    ->label('Harga Satuan')
+                                    ->numeric()
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::updateItemSubtotal($set, $get))
+                                    ->columnSpan(2),
+                                Forms\Components\TextInput::make('subtotal')
+                                    ->label('Jumlah')
+                                    ->numeric()
+                                    ->required()
+                                    ->readOnly()
+                                    ->columnSpan(3),
+                            ])
+                            ->columns(12)
+                            ->live()
+                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::updateTotals($set, $get)),
+                    ]),
+
                 Forms\Components\Section::make('Data Faktur')
                     ->schema([
                         Forms\Components\TextInput::make('invoice_number')
@@ -185,6 +241,33 @@ class InboundInvoiceResource extends Resource
                             ->columnSpanFull(),
                     ])->columns(2),
             ]);
+    }
+
+    public static function updateItemSubtotal(Forms\Set $set, Forms\Get $get): void
+    {
+        $qty = (float) $get('quantity') ?: 0;
+        $price = (float) $get('unit_price') ?: 0;
+        $subtotal = $qty * $price;
+        $set('subtotal', round($subtotal));
+    }
+
+    public static function updateTotals(Forms\Set $set, Forms\Get $get): void
+    {
+        $items = $get('items') ?? [];
+        if (! empty($items)) {
+            $subtotalAmount = 0;
+            foreach ($items as $item) {
+                $subtotalAmount += (float) ($item['subtotal'] ?? 0);
+            }
+
+            $taxPercentage = (float) ($get('tax_percentage') ?? 11);
+            $taxAmount = $subtotalAmount * ($taxPercentage / 100);
+            $totalAmount = $subtotalAmount + $taxAmount;
+
+            $set('subtotal_amount', round($subtotalAmount));
+            $set('tax_amount', round($taxAmount));
+            $set('total_amount', round($totalAmount));
+        }
     }
 
     public static function table(Table $table): Table

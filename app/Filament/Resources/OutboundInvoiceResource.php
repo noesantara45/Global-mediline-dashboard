@@ -66,6 +66,14 @@ class OutboundInvoiceResource extends Resource
                             ])
                             ->default('Unpaid')
                             ->required(),
+                        Forms\Components\TextInput::make('sales')
+                            ->label('Sales')
+                            ->placeholder('Contoh: Microbiologi, Diagnostic 2, NTB 2')
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('division')
+                            ->label('Divisi')
+                            ->placeholder('Contoh: Reagen, Alkes, Laboratorium')
+                            ->maxLength(255),
                     ])->columns(2),
 
                 Forms\Components\Section::make('Daftar Barang (Items)')
@@ -193,6 +201,16 @@ class OutboundInvoiceResource extends Resource
                 Tables\Columns\TextColumn::make('client.name')
                     ->label('Client')
                     ->sortable(),
+                Tables\Columns\TextColumn::make('sales')
+                    ->label('Sales')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('division')
+                    ->label('Divisi')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('invoice_number')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('issue_date')
@@ -240,6 +258,12 @@ class OutboundInvoiceResource extends Resource
                     ->icon('heroicon-o-printer')
                     ->color('success')
                     ->url(fn (OutboundInvoice $record) => route('outbound-invoice.pdf', $record))
+                    ->openUrlInNewTab(),
+                Tables\Actions\Action::make('surat_jalan')
+                    ->label('Surat Jalan')
+                    ->icon('heroicon-o-truck')
+                    ->color('info')
+                    ->url(fn (OutboundInvoice $record) => route('surat-jalan.pdf', $record))
                     ->openUrlInNewTab(),
             ])
             ->bulkActions([

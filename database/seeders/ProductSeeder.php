@@ -14,44 +14,78 @@ class ProductSeeder extends Seeder
     {
         $products = [
             [
-                'name' => 'Reagen Test Hba1C 25T',
-                'unit' => '25',
-                'price' => 1375000,
-                'description' => 'Reagen tes rata-rata gula darah.',
-                'photo' => '1.png',
+                'name' => 'Hematology',
+                'brand' => 'DIRUI',
+                'photo' => 'hematology.png',
+                'description' => 'Multi-Parameter Access.',
+                'unit' => 'Pcs',
+                'price' => 300000.00,
             ],
             [
-                'name' => 'Reagent Test CEA',
-                'unit' => '25',
-                'price' => 6500000,
-                'description' => 'Reagen deteksi penanda tumor kanker.',
-                'photo' => '2.png',
+                'name' => 'Dry Electrolyte',
+                'brand' => 'Prolyte',
+                'photo' => 'dry-electrolyte.png',
+                'description' => 'Electrolyte Analyzer',
+                'unit' => 'Pcs',
+                'price' => 10000.00,
             ],
             [
-                'name' => 'Reagent Test AFP',
-                'unit' => '25',
-                'price' => 6500000,
-                'description' => 'Reagen deteksi dini kanker hati.',
-                'photo' => '3.png',
+                'name' => 'IMMUNOASSAY',
+                'brand' => 'SD BIOSENSOR',
+                'photo' => 'immunoassay-fluorescence.png',
+                'description' => "SD Biosensor, fLOWRESENCE\niMMUNOASSAY",
+                'unit' => 'Pcs',
+                'price' => 9971.00,
             ],
             [
-                'name' => 'Catrige Electrolyte',
-                'unit' => '25',
-                'price' => 3000000,
-                'description' => 'Kartrid pengukur elektrolit dalam darah.',
-                'photo' => '4.png',
+                'name' => 'BLOOD CULTURE',
+                'brand' => 'Zhuhai Meihua',
+                'photo' => 'blood-culture.png',
+                'description' => 'KSO Unit. Zhuhai BT24',
+                'unit' => 'Pcs',
+                'price' => 11111.00,
             ],
             [
-                'name' => 'Control Electrolyte',
-                'unit' => '1',
-                'price' => 1500000,
-                'description' => 'Cairan kontrol kalibrasi mesin elektrolit.',
-                'photo' => '5.png',
+                'name' => 'IMMUNOASSAY CLIA',
+                'brand' => 'SD BIOSENSOR',
+                'photo' => 'immunoassay-clia.png',
+                'description' => "SD BIOSENSOR, Chemiluminescence\nImmunoassay (CLIA)",
+                'unit' => 'Pcs',
+                'price' => 11111110.00,
+            ],
+            [
+                'name' => 'Real Time PCR',
+                'brand' => 'SD BIOSENSOR',
+                'photo' => 'real-time-pcr.png',
+                'description' => 'SD BIOSENSOR M10',
+                'unit' => 'Pcs',
+                'price' => 62.00,
+            ],
+            [
+                'name' => 'Electrolyte Analyzer',
+                'brand' => 'Prolyte',
+                'photo' => 'electrolyte-analyzer.png',
+                'description' => 'Prolyte, Electrolyte Analyzer',
+                'unit' => 'Pcs',
+                'price' => 11110.00,
+            ],
+            [
+                'name' => 'HPLC Automatic',
+                'brand' => 'BIO-RAD',
+                'photo' => 'hplc-automatic.png',
+                'description' => "BIORAD D10, HPLC AUTOMATIC\nANALYZER",
+                'unit' => 'Pcs',
+                'price' => 11111110.00,
             ],
         ];
 
-        foreach ($products as $product) {
-            Product::create($product);
+        foreach ($products as $productData) {
+            Product::updateOrCreate(
+                [
+                    'name' => $productData['name'],
+                ],
+                $productData
+            );
         }
     }
 }
