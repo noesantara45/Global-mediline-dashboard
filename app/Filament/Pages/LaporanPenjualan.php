@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\OutboundInvoice;
 use App\Models\OutboundInvoiceItem;
+use App\Models\Product;
 use Filament\Forms;
 use Filament\Pages\Page;
 use Filament\Tables;
@@ -11,6 +12,7 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
+use Illuminate\Support\Carbon;
 
 class LaporanPenjualan extends Page implements HasTable
 {
@@ -162,26 +164,84 @@ class LaporanPenjualan extends Page implements HasTable
             ])
             ->filters([
                 Tables\Filters\Filter::make('issue_date')
+                    ->columnSpan(['default' => 1, 'sm' => 2, 'xl' => 2])
+                    ->columns(['default' => 1, 'sm' => 2, 'xl' => 2])
                     ->form([
                         Forms\Components\DatePicker::make('from')
-                            ->label('Dari Tanggal'),
+                            ->label('Dari Tanggal')
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->closeOnDateSelection(),
                         Forms\Components\DatePicker::make('until')
-                            ->label('Sampai Tanggal'),
+                            ->label('Sampai Tanggal')
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->closeOnDateSelection(),
                     ])
                     ->query(function ($query, array $data) {
                         return $query
-                            ->when($data['from'], fn ($q, $date) => $q->whereDate('issue_date', '>=', $date))
-                            ->when($data['until'], fn ($q, $date) => $q->whereDate('issue_date', '<=', $date));
+                            ->when($data['from'] ?? null, fn ($q, $date) => $q->whereDate('issue_date', '>=', $date))
+                            ->when($data['until'] ?? null, fn ($q, $date) => $q->whereDate('issue_date', '<=', $date));
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+                        if (! empty($data['from'])) {
+                            $indicators['from'] = 'Dari: '.Carbon::parse($data['from'])->format('d/m/Y');
+                        }
+                        if (! empty($data['until'])) {
+                            $indicators['until'] = 'Sampai: '.Carbon::parse($data['until'])->format('d/m/Y');
+                        }
+
+                        return $indicators;
+                    }),
+
+                Tables\Filters\Filter::make('invoice_number')
+                    ->form([
+                        Forms\Components\TextInput::make('code')
+                            ->label('Kode Faktur')
+                            ->placeholder('Kode Faktur...')
+                            ->live(debounce: 500),
+                    ])
+                    ->query(function ($query, array $data) {
+                        return $query->when(
+                            filled($data['code'] ?? null),
+                            fn ($q) => $q->where('invoice_number', 'like', '%'.trim($data['code']).'%')
+                        );
+                    })
+                    ->indicateUsing(function (array $data): ?string {
+                        if (! filled($data['code'] ?? null)) {
+                            return null;
+                        }
+
+                        return 'Faktur: '.$data['code'];
                     }),
 
                 Tables\Filters\SelectFilter::make('client_id')
                     ->label('Customer')
+                    ->placeholder('Customer')
                     ->relationship('client', 'name')
                     ->searchable()
                     ->preload(),
 
+                Tables\Filters\SelectFilter::make('brand')
+                    ->label('Merek')
+                    ->placeholder('Merek')
+                    ->options(
+                        fn () => Product::whereNotNull('brand')
+                            ->where('brand', '!=', '')
+                            ->distinct()
+                            ->pluck('brand', 'brand')
+                            ->toArray()
+                    )
+                    ->query(function ($query, array $data) {
+                        if (! empty($data['value'])) {
+                            $query->whereHas('items.product', fn ($pq) => $pq->where('brand', $data['value']));
+                        }
+                    }),
+
                 Tables\Filters\SelectFilter::make('sales')
                     ->label('Sales')
+                    ->placeholder('Sales')
                     ->options(fn () => OutboundInvoice::query()
                         ->whereNotNull('sales')
                         ->where('sales', '!=', '')
@@ -193,6 +253,7 @@ class LaporanPenjualan extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('division')
                     ->label('Divisi')
+                    ->placeholder('Divisi')
                     ->options(fn () => OutboundInvoice::query()
                         ->whereNotNull('division')
                         ->where('division', '!=', '')
@@ -204,6 +265,7 @@ class LaporanPenjualan extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Status Pembayaran')
+                    ->placeholder('Status Pembayaran')
                     ->options([
                         'Paid' => 'Paid (Lunas)',
                         'Unpaid' => 'Unpaid (Belum Lunas)',
@@ -215,6 +277,7 @@ class LaporanPenjualan extends Page implements HasTable
                     ->form([
                         Forms\Components\Select::make('condition')
                             ->label('Status Jatuh Tempo')
+                            ->placeholder('Semua')
                             ->options([
                                 'overdue' => 'Lewat Jatuh Tempo (Overdue)',
                                 'due_this_month' => 'Jatuh Tempo Bulan Ini',
@@ -222,17 +285,22 @@ class LaporanPenjualan extends Page implements HasTable
                     ])
                     ->query(function ($query, array $data) {
                         return $query
-                            ->when($data['condition'] === 'overdue', function ($q) {
+                            ->when(($data['condition'] ?? null) === 'overdue', function ($q) {
                                 $q->where('status', '!=', 'Paid')
                                     ->whereDate('due_date', '<', now());
                             })
-                            ->when($data['condition'] === 'due_this_month', function ($q) {
+                            ->when(($data['condition'] ?? null) === 'due_this_month', function ($q) {
                                 $q->whereMonth('due_date', now()->month)
                                     ->whereYear('due_date', now()->year);
                             });
                     }),
-            ], layout: FiltersLayout::AboveContentCollapsible)
-            ->filtersFormColumns(6)
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns([
+                'default' => 1,
+                'sm' => 2,
+                'md' => 3,
+                'xl' => 6,
+            ])
             ->headerActions([
                 Tables\Actions\Action::make('export_csv')
                     ->label('Export Rekap Jual')

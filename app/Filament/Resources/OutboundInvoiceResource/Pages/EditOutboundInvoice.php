@@ -16,4 +16,13 @@ class EditOutboundInvoice extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function getRedirectUrl(): string
+    {
+        if (filled($this->previousUrl) && ! str_contains($this->previousUrl, $this->getResource()::getUrl('edit', ['record' => $this->record]))) {
+            return $this->previousUrl;
+        }
+
+        return $this->getResource()::getUrl('index');
+    }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\OutboundInvoiceResource;
+use App\Models\OutboundInvoice;
 use App\Models\OutboundInvoiceItem;
 use App\Models\Product;
 use Filament\Forms;
@@ -9,7 +11,9 @@ use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
+use Illuminate\Support\Carbon;
 
 class LaporanDetailPenjualan extends Page implements HasTable
 {
@@ -111,26 +115,68 @@ class LaporanDetailPenjualan extends Page implements HasTable
             ])
             ->filters([
                 Tables\Filters\Filter::make('issue_date')
+                    ->columnSpan(['default' => 1, 'sm' => 2, 'xl' => 2])
+                    ->columns(['default' => 1, 'sm' => 2, 'xl' => 2])
                     ->form([
                         Forms\Components\DatePicker::make('from')
-                            ->label('Dari Tanggal'),
+                            ->label('Dari Tanggal')
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->closeOnDateSelection(),
                         Forms\Components\DatePicker::make('until')
-                            ->label('Sampai Tanggal'),
+                            ->label('Sampai Tanggal')
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->closeOnDateSelection(),
                     ])
                     ->query(function ($query, array $data) {
                         return $query
-                            ->when($data['from'], fn ($q, $date) => $q->whereHas('invoice', fn ($iq) => $iq->whereDate('issue_date', '>=', $date)))
-                            ->when($data['until'], fn ($q, $date) => $q->whereHas('invoice', fn ($iq) => $iq->whereDate('issue_date', '<=', $date)));
+                            ->when($data['from'] ?? null, fn ($q, $date) => $q->whereDate('outbound_invoices.issue_date', '>=', $date))
+                            ->when($data['until'] ?? null, fn ($q, $date) => $q->whereDate('outbound_invoices.issue_date', '<=', $date));
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+                        if (! empty($data['from'])) {
+                            $indicators['from'] = 'Dari: '.Carbon::parse($data['from'])->format('d/m/Y');
+                        }
+                        if (! empty($data['until'])) {
+                            $indicators['until'] = 'Sampai: '.Carbon::parse($data['until'])->format('d/m/Y');
+                        }
+
+                        return $indicators;
+                    }),
+
+                Tables\Filters\Filter::make('invoice_number')
+                    ->form([
+                        Forms\Components\TextInput::make('code')
+                            ->label('Kode Faktur')
+                            ->placeholder('Kode Faktur...')
+                            ->live(debounce: 500),
+                    ])
+                    ->query(function ($query, array $data) {
+                        return $query->when(
+                            filled($data['code'] ?? null),
+                            fn ($q) => $q->where('outbound_invoices.invoice_number', 'like', '%'.trim($data['code']).'%')
+                        );
+                    })
+                    ->indicateUsing(function (array $data): ?string {
+                        if (! filled($data['code'] ?? null)) {
+                            return null;
+                        }
+
+                        return 'Faktur: '.$data['code'];
                     }),
 
                 Tables\Filters\SelectFilter::make('client_id')
                     ->label('Customer')
+                    ->placeholder('Customer')
                     ->relationship('invoice.client', 'name')
                     ->searchable()
                     ->preload(),
 
                 Tables\Filters\SelectFilter::make('brand')
                     ->label('Merek')
+                    ->placeholder('Merek')
                     ->options(
                         fn () => Product::whereNotNull('brand')
                             ->where('brand', '!=', '')
@@ -143,6 +189,56 @@ class LaporanDetailPenjualan extends Page implements HasTable
                             $query->whereHas('product', fn ($pq) => $pq->where('brand', $data['value']));
                         }
                     }),
+
+                Tables\Filters\SelectFilter::make('sales')
+                    ->label('Sales')
+                    ->placeholder('Sales')
+                    ->options(
+                        fn () => OutboundInvoice::query()
+                            ->whereNotNull('sales')
+                            ->where('sales', '!=', '')
+                            ->distinct()
+                            ->pluck('sales', 'sales')
+                            ->toArray()
+                    )
+                    ->query(function ($query, array $data) {
+                        if (! empty($data['value'])) {
+                            $query->where('outbound_invoices.sales', $data['value']);
+                        }
+                    })
+                    ->searchable(),
+
+                Tables\Filters\SelectFilter::make('division')
+                    ->label('Divisi')
+                    ->placeholder('Divisi')
+                    ->options(
+                        fn () => OutboundInvoice::query()
+                            ->whereNotNull('division')
+                            ->where('division', '!=', '')
+                            ->distinct()
+                            ->pluck('division', 'division')
+                            ->toArray()
+                    )
+                    ->query(function ($query, array $data) {
+                        if (! empty($data['value'])) {
+                            $query->where('outbound_invoices.division', $data['value']);
+                        }
+                    })
+                    ->searchable(),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns([
+                'default' => 1,
+                'sm' => 2,
+                'md' => 3,
+                'xl' => 6,
+            ])
+            ->actions([
+                Tables\Actions\Action::make('edit')
+                    ->label('Edit')
+                    ->icon('heroicon-m-pencil-square')
+                    ->color('primary')
+                    ->tooltip('Buka & Edit Faktur Penjualan')
+                    ->url(fn (OutboundInvoiceItem $record): string => OutboundInvoiceResource::getUrl('edit', ['record' => $record->outbound_invoice_id])),
             ])
             ->defaultSort('id', 'desc')
             ->striped();
