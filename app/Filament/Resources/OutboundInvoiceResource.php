@@ -120,11 +120,16 @@ class OutboundInvoiceResource extends Resource
                                     ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::updateItemSubtotal($set, $get))
                                     ->columnSpan(2),
                                 Forms\Components\TextInput::make('discount_percentage')
-                                    ->label('Diskon (%)')
+                                    ->label('Diskon 1 (%)')
                                     ->numeric()
                                     ->default(0)
                                     ->live()
                                     ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::updateItemSubtotal($set, $get))
+                                    ->columnSpan(1),
+                                Forms\Components\TextInput::make('discount_2_percentage')
+                                    ->label('Diskon 2 (%)')
+                                    ->numeric()
+                                    ->default(0)
                                     ->columnSpan(1),
                                 Forms\Components\TextInput::make('subtotal')
                                     ->label('Jumlah')
@@ -133,7 +138,7 @@ class OutboundInvoiceResource extends Resource
                                     ->readOnly()
                                     ->columnSpan(2),
                             ])
-                            ->columns(10)
+                            ->columns(11)
                             ->live()
                             ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::updateTotals($set, $get)),
                     ]),

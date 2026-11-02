@@ -11,7 +11,13 @@ use Flowframe\Trend\TrendValue;
 
 class IncomeExpenseChart extends ChartWidget
 {
-    protected static ?string $heading = 'Grafik Pemasukan vs Pengeluaran (Tahun Ini)';
+    protected static ?int $sort = 2;
+
+    protected static bool $isLazy = false;
+
+    protected int|string|array $columnSpan = 'full';
+
+    protected static ?string $heading = 'Grafik Tren Pemasukan vs Pengeluaran (Tahun Ini)';
 
     protected function getData(): array
     {

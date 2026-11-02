@@ -37,6 +37,7 @@ class ProductResource extends Resource
                                 Forms\Components\TextInput::make('name')
                                     ->label('Nama Barang / Produk')
                                     ->required()
+                                    ->live(onBlur: true)
                                     ->maxLength(255),
 
                                 Forms\Components\TextInput::make('brand')
@@ -75,9 +76,10 @@ class ProductResource extends Resource
                             ->getUploadedFileNameForStorageUsing(
                                 function (Forms\Get $get, TemporaryUploadedFile $file): string {
                                     $productName = $get('name');
-                                    $slug = ! empty($productName) ? Str::slug($productName) : 'product';
+                                    $rawName = ! empty($productName) ? $productName : pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+                                    $slug = Str::slug($rawName);
 
-                                    return $slug.'.'.$file->getClientOriginalExtension();
+                                    return ($slug ?: 'produk').'.'.strtolower($file->getClientOriginalExtension());
                                 }
                             )
                             ->imageEditor()
@@ -90,10 +92,13 @@ class ProductResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('photo')
+                Tables\Columns\ImageColumn::make('photo_url')
                     ->label('Foto')
-                    ->disk('public')
-                    ->square(),
+                    ->state(fn (Product $record): ?string => $record->photo_url)
+                    ->defaultImageUrl(asset('images/placeholder-product.svg'))
+                    ->circular()
+                    ->size(46)
+                    ->alignCenter(),
 
                 Tables\Columns\TextColumn::make('name')
                     ->label('Nama Barang')

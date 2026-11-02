@@ -96,7 +96,7 @@ class LaporanPenjualan extends Page implements HasTable
                     ),
 
                 Tables\Columns\TextColumn::make('total_discount')
-                    ->label('Disk. 1')
+                    ->label('Diskon')
                     ->money('IDR', locale: 'id')
                     ->summarize(
                         Tables\Columns\Summarizers\Summarizer::make()
@@ -251,7 +251,7 @@ class LaporanPenjualan extends Page implements HasTable
                                 'Divisi',
                                 'Tanggal',
                                 'Gross Sale',
-                                'Disk. 1',
+                                'Diskon',
                                 'PPN',
                                 'Sub Total',
                                 'Net Sale',

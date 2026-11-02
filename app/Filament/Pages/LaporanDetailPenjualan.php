@@ -89,8 +89,13 @@ class LaporanDetailPenjualan extends Page implements HasTable
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('discount_percentage')
-                    ->label('Diskon')
-                    ->formatStateUsing(fn ($state) => $state > 0 ? $state.'%' : '-')
+                    ->label('Diskon 1')
+                    ->formatStateUsing(fn ($state) => (float) $state > 0 ? (float) $state.'%' : '-')
+                    ->alignCenter(),
+
+                Tables\Columns\TextColumn::make('discount_2_percentage')
+                    ->label('Diskon 2')
+                    ->formatStateUsing(fn ($state) => (float) $state > 0 ? (float) $state.'%' : '-')
                     ->alignCenter(),
 
                 Tables\Columns\TextColumn::make('subtotal')

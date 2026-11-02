@@ -9,9 +9,13 @@ use Filament\Widgets\TableWidget as BaseWidget;
 
 class LatestOutboundInvoices extends BaseWidget
 {
-    protected static ?string $heading = 'Faktur Penjualan Terbaru';
+    protected static ?string $heading = 'Faktur Penjualan Terbaru (Outbound)';
 
-    protected int|string|array $columnSpan = 'full';
+    protected static ?int $sort = 4;
+
+    protected static bool $isLazy = false;
+
+    protected int|string|array $columnSpan = 1;
 
     public function table(Table $table): Table
     {
@@ -21,28 +25,44 @@ class LatestOutboundInvoices extends BaseWidget
             )
             ->columns([
                 Tables\Columns\TextColumn::make('invoice_number')
-                    ->label('No Faktur')
-                    ->searchable(),
+                    ->label('No. Faktur')
+                    ->searchable()
+                    ->weight('bold'),
+
                 Tables\Columns\TextColumn::make('client.name')
                     ->label('Customer')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('issue_date')
-                    ->label('Tanggal')
-                    ->date()
-                    ->sortable(),
+                    ->searchable()
+                    ->limit(20),
+
+                Tables\Columns\TextColumn::make('due_date')
+                    ->label('Jatuh Tempo')
+                    ->date('d M Y')
+                    ->color(fn (OutboundInvoice $record): string => ($record->status !== 'Paid' && $record->due_date && $record->due_date < now()->toDateString()) ? 'danger' : 'gray'),
+
                 Tables\Columns\TextColumn::make('total_amount')
                     ->label('Total Tagihan')
-                    ->numeric()
-                    ->prefix('Rp ')
+                    ->money('IDR', locale: 'id')
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('status')
+                    ->label('Status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'Paid' => 'success',
+                        'Partial' => 'warning',
+                        'Unpaid' => 'danger',
+                        default => 'gray',
+                    }),
             ])
             ->actions([
                 Tables\Actions\Action::make('print')
-                    ->label('Cetak PDF')
+                    ->label('')
                     ->icon('heroicon-o-printer')
-                    ->color('success')
+                    ->color('gray')
+                    ->tooltip('Cetak PDF')
                     ->url(fn (OutboundInvoice $record): string => url('/print/outbound-invoice/'.$record->id))
                     ->openUrlInNewTab(),
-            ]);
+            ])
+            ->paginated(false);
     }
 }
