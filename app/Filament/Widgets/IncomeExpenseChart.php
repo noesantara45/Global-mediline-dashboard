@@ -15,38 +15,89 @@ class IncomeExpenseChart extends ChartWidget
 
     protected static bool $isLazy = false;
 
-    protected int|string|array $columnSpan = 'full';
+    /**
+     * @var int | string | array<string, int | string | null>
+     */
+    protected int|string|array $columnSpan = [
+        'default' => 'full',
+        'md' => 2,
+        'xl' => 4,
+    ];
 
-    protected static ?string $heading = 'Grafik Tren Pemasukan vs Pengeluaran (Tahun Ini)';
+    protected static ?string $heading = 'Tren Penjualan vs Pembelian';
+
+    public ?string $filter = 'this_year';
+
+    public function getDescription(): ?string
+    {
+        return 'Perbandingan total faktur penjualan (Outbound) dan pembelian (Inbound) aktif per bulan.';
+    }
+
+    protected function getFilters(): ?array
+    {
+        $currentYear = now()->year;
+
+        return [
+            'this_year' => 'Tahun '.$currentYear,
+            'last_year' => 'Tahun '.($currentYear - 1),
+        ];
+    }
 
     protected function getData(): array
     {
-        $outboundData = Trend::model(OutboundInvoice::class)
+        $targetYear = $this->filter === 'last_year' ? now()->startOfYear()->subYear() : now()->startOfYear();
+        $start = $targetYear->copy()->startOfYear();
+        $end = $targetYear->copy()->endOfYear();
+
+        $outboundData = Trend::query(OutboundInvoice::query()->where('status', '!=', 'Cancelled'))
             ->dateColumn('issue_date')
-            ->between(start: now()->startOfYear(), end: now()->endOfYear())
+            ->between(start: $start, end: $end)
             ->perMonth()
             ->sum('total_amount');
 
-        $inboundData = Trend::model(InboundInvoice::class)
+        $inboundData = Trend::query(InboundInvoice::query()->where('status', '!=', 'Cancelled'))
             ->dateColumn('issue_date')
-            ->between(start: now()->startOfYear(), end: now()->endOfYear())
+            ->between(start: $start, end: $end)
             ->perMonth()
             ->sum('total_amount');
 
         return [
             'datasets' => [
                 [
-                    'label' => 'Pemasukan (Outbound)',
-                    'data' => $outboundData->map(fn (TrendValue $value) => $value->aggregate),
-                    'backgroundColor' => '#2E8B57', // Green
+                    'label' => 'Penjualan (Outbound)',
+                    'data' => $outboundData->map(fn (TrendValue $value): float => (float) $value->aggregate),
+                    'backgroundColor' => '#2D8A56',
+                    'borderRadius' => 5,
                 ],
                 [
-                    'label' => 'Pengeluaran (Inbound)',
-                    'data' => $inboundData->map(fn (TrendValue $value) => $value->aggregate),
-                    'backgroundColor' => '#E3342F', // Red
+                    'label' => 'Pembelian (Inbound)',
+                    'data' => $inboundData->map(fn (TrendValue $value): float => (float) $value->aggregate),
+                    'backgroundColor' => '#F59E0B',
+                    'borderRadius' => 5,
                 ],
             ],
-            'labels' => $outboundData->map(fn (TrendValue $value) => Carbon::parse($value->date)->format('M Y')),
+            'labels' => $outboundData->map(fn (TrendValue $value): string => Carbon::parse($value->date)->format('M Y')),
+        ];
+    }
+
+    protected function getOptions(): array
+    {
+        return [
+            'plugins' => [
+                'legend' => [
+                    'position' => 'bottom',
+                    'labels' => [
+                        'boxWidth' => 12,
+                        'padding' => 14,
+                    ],
+                ],
+            ],
+            'scales' => [
+                'y' => [
+                    'beginAtZero' => true,
+                ],
+            ],
+            'maintainAspectRatio' => false,
         ];
     }
 

@@ -22,11 +22,11 @@ class PurchaseMonthlyChart extends ChartWidget
 
     protected static ?string $maxHeight = '320px';
 
-    protected static ?string $heading = 'Tren Pengeluaran Pembelian';
+    protected static ?string $heading = 'Tren Pembelian Inbound';
 
     public function getDescription(): ?string
     {
-        return 'Pergerakan nilai belanja barang ke supplier sesuai filter periode aktif.';
+        return 'Rekap nilai pembelian dan pembayaran dari Inbound Invoices sesuai filter aktif.';
     }
 
     protected function getFilteredQuery(): Builder
@@ -42,6 +42,8 @@ class PurchaseMonthlyChart extends ChartWidget
 
         if ($status) {
             $query->where('status', $status);
+        } else {
+            $query->where('status', '!=', 'Cancelled');
         }
 
         return $query;
@@ -49,28 +51,62 @@ class PurchaseMonthlyChart extends ChartWidget
 
     protected function getData(): array
     {
+        $baseQuery = $this->getFilteredQuery();
         $startDateStr = $this->filters['start_date'] ?? null;
         $endDateStr = $this->filters['end_date'] ?? null;
 
-        $start = $startDateStr ? Carbon::parse($startDateStr)->startOfDay() : now()->startOfYear();
-        $end = $endDateStr ? Carbon::parse($endDateStr)->endOfDay() : now()->endOfYear();
+        $minDate = (clone $baseQuery)->min('issue_date');
+        $maxDate = (clone $baseQuery)->max('issue_date');
+
+        if (! $startDateStr && ! $endDateStr) {
+            if ($minDate && $maxDate) {
+                $start = Carbon::parse($minDate)->startOfMonth();
+                $end = Carbon::parse($maxDate)->endOfMonth();
+
+                if ($start->diffInMonths($end) < 5) {
+                    $start = (clone $end)->subMonths(5)->startOfMonth();
+                }
+            } else {
+                $start = now()->startOfYear();
+                $end = now()->endOfYear();
+            }
+        } else {
+            $start = $startDateStr
+                ? Carbon::parse($startDateStr)->startOfDay()
+                : ($minDate ? Carbon::parse($minDate)->startOfMonth() : now()->startOfYear());
+            $end = $endDateStr
+                ? Carbon::parse($endDateStr)->endOfDay()
+                : ($maxDate ? Carbon::parse($maxDate)->endOfMonth() : now()->endOfYear());
+        }
+
+        if ($start->gt($end)) {
+            $end = (clone $start)->endOfMonth();
+        }
 
         $diffInDays = $start->diffInDays($end);
         $isDaily = ($diffInDays <= 31);
 
-        $trend = Trend::query($this->getFilteredQuery())
+        $purchaseTrend = Trend::query(clone $baseQuery)
             ->dateColumn('issue_date')
             ->between(start: $start, end: $end);
 
-        $data = $isDaily
-            ? $trend->perDay()->sum('total_amount')
-            : $trend->perMonth()->sum('total_amount');
+        $purchaseData = $isDaily
+            ? $purchaseTrend->perDay()->sum('total_amount')
+            : $purchaseTrend->perMonth()->sum('total_amount');
+
+        $paidTrend = Trend::query(clone $baseQuery)
+            ->dateColumn('issue_date')
+            ->between(start: $start, end: $end);
+
+        $paidData = $isDaily
+            ? $paidTrend->perDay()->sum('paid_amount')
+            : $paidTrend->perMonth()->sum('paid_amount');
 
         return [
             'datasets' => [
                 [
                     'label' => 'Total Pembelian (Rp)',
-                    'data' => $data->map(fn (TrendValue $value): float => (float) $value->aggregate),
+                    'data' => $purchaseData->map(fn (TrendValue $value): float => (float) $value->aggregate),
                     'backgroundColor' => 'rgba(239, 68, 68, 0.15)',
                     'borderColor' => '#EF4444',
                     'pointBackgroundColor' => '#EF4444',
@@ -80,8 +116,20 @@ class PurchaseMonthlyChart extends ChartWidget
                     'fill' => true,
                     'tension' => 0.35,
                 ],
+                [
+                    'label' => 'Sudah Dibayar (Rp)',
+                    'data' => $paidData->map(fn (TrendValue $value): float => (float) $value->aggregate),
+                    'backgroundColor' => 'rgba(16, 185, 129, 0.12)',
+                    'borderColor' => '#10B981',
+                    'pointBackgroundColor' => '#10B981',
+                    'pointBorderColor' => '#ffffff',
+                    'pointHoverRadius' => 5,
+                    'borderWidth' => 2,
+                    'fill' => false,
+                    'tension' => 0.35,
+                ],
             ],
-            'labels' => $data->map(function (TrendValue $value) use ($isDaily): string {
+            'labels' => $purchaseData->map(function (TrendValue $value) use ($isDaily): string {
                 return $isDaily
                     ? Carbon::parse($value->date)->translatedFormat('d M')
                     : Carbon::parse($value->date)->translatedFormat('M Y');
@@ -94,7 +142,7 @@ class PurchaseMonthlyChart extends ChartWidget
         return [
             'plugins' => [
                 'legend' => [
-                    'display' => false,
+                    'display' => true,
                 ],
             ],
             'scales' => [

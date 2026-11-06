@@ -130,68 +130,59 @@
             @if (! $hasHeader) x-cloak @endif
             x-bind:hidden="! (@js($hasHeader) || (selectedRecords.length && @js(count($bulkActions))))"
             x-show="@js($hasHeader) || (selectedRecords.length && @js(count($bulkActions)))"
-            class="fi-ta-header-ctn divide-y divide-gray-200 dark:divide-white/10"
+            class="fi-ta-header-ctn divide-y divide-gray-200 rounded-t-xl bg-white dark:divide-white/10 dark:bg-gray-900"
         >
             {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::HEADER_BEFORE, scopes: static::class) }}
 
             @if ($header)
                 {{ $header }}
-            @elseif (($heading || $description || $headerActions) && ! $isReordering)
-                <x-filament-tables::header
-                    :actions="$isReordering ? [] : $headerActions"
-                    :actions-position="$headerActionsPosition"
-                    :description="$description"
-                    :heading="$heading"
-                />
             @endif
 
             {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::HEADER_AFTER, scopes: static::class) }}
 
-            @if ($hasFiltersAboveContent)
-                <div
-                    x-data="{ areFiltersOpen: @js(! $hasFiltersAboveContentCollapsible) }"
-                    @class([
-                        'fi-ta-filters-above-content-ctn grid px-4 py-4 sm:px-6',
-                    ])
-                >
-                    <x-filament-tables::filters
-                        :apply-action="$getFiltersApplyAction()"
-                        :form="$getFiltersForm()"
-                        x-cloak
-                        x-show="areFiltersOpen"
-                    />
-
-                    @if ($hasFiltersAboveContentCollapsible)
-                        <span
-                            x-on:click="areFiltersOpen = ! areFiltersOpen"
-                            x-bind:class="{ @js($hasDeferredFilters() ? '-mt-7' : 'mt-3'): areFiltersOpen }"
-                            class="ms-auto"
-                        >
-                            {{ $filtersTriggerAction->badge($activeFiltersCount) }}
-                        </span>
-                    @endif
-                </div>
-            @endif
-
             {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_BEFORE, scopes: static::class) }}
 
-            <div
-                @if (! $hasHeaderToolbar) x-cloak @endif
-                x-show="@js($hasHeaderToolbar) || (selectedRecords.length && @js(count($bulkActions)))"
-                class="fi-ta-header-toolbar flex items-center justify-between gap-x-4 px-4 py-3 sm:px-6"
-            >
-                {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_START, scopes: static::class) }}
+            <div class="fi-ta-compact-toolbar flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+                <div class="flex items-center gap-x-3">
+                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_START, scopes: static::class) }}
 
-                <div class="flex shrink-0 items-center gap-x-4">
-                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_REORDER_TRIGGER_BEFORE, scopes: static::class) }}
-
-                    @if ($isReorderable)
-                        <span x-show="! selectedRecords.length">
-                            {{ $reorderRecordsTriggerAction }}
+                    @if ($hasFiltersAboveContent)
+                        <span class="inline-flex items-center gap-x-1.5 text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-200">
+                            <x-filament::icon
+                                icon="heroicon-m-funnel"
+                                class="h-4 w-4 text-primary-600 dark:text-primary-400"
+                            />
+                            {{ __('filament-tables::table.filters.heading') }}
                         </span>
-                    @endif
 
-                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_REORDER_TRIGGER_AFTER, scopes: static::class) }}
+                        <x-filament::link
+                            :attributes="
+                                \Filament\Support\prepare_inherited_attributes(
+                                    new \Illuminate\View\ComponentAttributeBag([
+                                        'color' => 'danger',
+                                        'size' => 'sm',
+                                        'tag' => 'button',
+                                        'wire:click' => 'resetTableFiltersForm',
+                                        'wire:loading.remove.delay.' . config('filament.livewire_loading_delay', 'default') => '',
+                                        'wire:target' => 'resetTableFiltersForm',
+                                    ])
+                                )->class(['text-xs font-medium'])
+                            "
+                        >
+                            {{ __('filament-tables::table.filters.actions.reset.label') }}
+                        </x-filament::link>
+
+                        <x-filament::loading-indicator
+                            :attributes="
+                                \Filament\Support\prepare_inherited_attributes(
+                                    new \Illuminate\View\ComponentAttributeBag([
+                                        'wire:loading.delay.' . config('filament.livewire_loading_delay', 'default') => '',
+                                        'wire:target' => 'tableFilters,applyTableFilters,resetTableFiltersForm',
+                                    ])
+                                )->class(['h-4 w-4 text-gray-400 dark:text-gray-500'])
+                            "
+                        />
+                    @endif
 
                     @if ((! $isReordering) && count($bulkActions))
                         <x-filament-tables::actions
@@ -200,68 +191,56 @@
                             x-show="selectedRecords.length"
                         />
                     @endif
+                </div>
 
-                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_GROUPING_SELECTOR_BEFORE, scopes: static::class) }}
+                <div class="ms-auto flex flex-wrap items-center gap-2">
+                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_SEARCH_BEFORE, scopes: static::class) }}
 
-                    @if ($areGroupingSettingsVisible)
-                        <x-filament-tables::groups
-                            :direction-setting="$isGroupingDirectionSettingHidden"
-                            :dropdown-on-desktop="$areGroupingSettingsInDropdownOnDesktop()"
-                            :groups="$groups"
-                            :trigger-action="$getGroupRecordsTriggerAction()"
+                    @if ($isGlobalSearchVisible)
+                        <x-filament-tables::search-field
+                            :debounce="$searchDebounce"
+                            :on-blur="$isSearchOnBlur"
+                            :placeholder="$getSearchPlaceholder()"
                         />
                     @endif
 
-                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_GROUPING_SELECTOR_AFTER, scopes: static::class) }}
+                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_SEARCH_AFTER, scopes: static::class) }}
+
+                    @if ($headerActions && (! $isReordering))
+                        <x-filament-tables::actions
+                            :actions="$headerActions"
+                            class="shrink-0"
+                        />
+                    @endif
+
+                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_END) }}
                 </div>
-
-                @if ($isGlobalSearchVisible || $hasFiltersDialog || $hasColumnToggleDropdown)
-                    <div class="ms-auto flex items-center gap-x-4">
-                        {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_SEARCH_BEFORE, scopes: static::class) }}
-
-                        @if ($isGlobalSearchVisible)
-                            <x-filament-tables::search-field
-                                :debounce="$searchDebounce"
-                                :on-blur="$isSearchOnBlur"
-                                :placeholder="$getSearchPlaceholder()"
-                            />
-                        @endif
-
-                        {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_SEARCH_AFTER, scopes: static::class) }}
-
-                        @if ($hasFiltersDialog || $hasColumnToggleDropdown)
-                            @if ($hasFiltersDialog)
-                                <x-filament-tables::filters.dialog
-                                    :active-filters-count="$activeFiltersCount"
-                                    :apply-action="$getFiltersApplyAction()"
-                                    :form="$getFiltersForm()"
-                                    :layout="$filtersLayout"
-                                    :max-height="$getFiltersFormMaxHeight()"
-                                    :trigger-action="$filtersTriggerAction"
-                                    :width="$getFiltersFormWidth()"
-                                />
-                            @endif
-
-                            {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_TOGGLE_COLUMN_TRIGGER_BEFORE, scopes: static::class) }}
-
-                            @if ($hasColumnToggleDropdown)
-                                <x-filament-tables::column-toggle.dropdown
-                                    :form="$getColumnToggleForm()"
-                                    :max-height="$getColumnToggleFormMaxHeight()"
-                                    :trigger-action="$toggleColumnsTriggerAction"
-                                    :width="$getColumnToggleFormWidth()"
-                                />
-                            @endif
-
-                            {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_TOGGLE_COLUMN_TRIGGER_AFTER, scopes: static::class) }}
-                        @endif
-                    </div>
-                @endif
-
-                {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_END) }}
             </div>
 
+            @if ($hasFiltersAboveContent)
+                <div
+                    x-data="{ areFiltersOpen: @js(! $hasFiltersAboveContentCollapsible) }"
+                    class="fi-ta-filters-above-content-ctn grid px-4 py-2"
+                >
+                    <div x-cloak x-show="areFiltersOpen" class="fi-ta-filters-compact">
+                        {{ $getFiltersForm() }}
+
+                        @if ($getFiltersApplyAction()->isVisible())
+                            <div class="mt-2">
+                                {{ $getFiltersApplyAction() }}
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @endif
+
             {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\Tables\View\TablesRenderHook::TOOLBAR_AFTER) }}
+
+            @if (count($filterIndicators))
+                <x-filament-tables::filters.indicators
+                    :indicators="$filterIndicators"
+                />
+            @endif
         </div>
 
         @if ($isReordering)
@@ -274,12 +253,6 @@
                 :select-current-page-only="$selectsCurrentPageOnly"
                 x-bind:hidden="! selectedRecords.length"
                 x-show="selectedRecords.length"
-            />
-        @endif
-
-        @if (count($filterIndicators))
-            <x-filament-tables::filters.indicators
-                :indicators="$filterIndicators"
             />
         @endif
 
@@ -1205,10 +1178,10 @@
                                                  <thead class="bg-slate-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-[11px] font-semibold border-b border-slate-200 dark:border-gray-700 uppercase tracking-wide">
                                                     <tr>
                                                         <th class="px-3 py-1.5 w-10 text-center">No</th>
-                                                        <th class="px-3 py-1.5">Kode Barang</th>
                                                         <th class="px-3 py-1.5">Nama Barang</th>
-                                                        <th class="px-3 py-1.5 text-center">SN</th>
-                                                        <th class="px-3 py-1.5 text-center w-14">Qtt</th>
+                                                        <th class="px-3 py-1.5">Divisi</th>
+                                                        <th class="px-3 py-1.5">Merek</th>
+                                                        <th class="px-3 py-1.5 text-center w-16">Qtt</th>
                                                         <th class="px-3 py-1.5 text-right">Harga Jual</th>
                                                         <th class="px-3 py-1.5 text-right">Diskon</th>
                                                         <th class="px-3 py-1.5 text-right">Subtotal</th>
@@ -1219,13 +1192,14 @@
                                                         @php
                                                             $gross = (float) $item->quantity * (float) $item->unit_price;
                                                             $disc = max(0, $gross - (float) $item->subtotal);
-                                                            $productCode = $item->product?->code ?? $item->product?->sku ?? '-';
+                                                            $itemDivision = $item->product?->division ?? $record->division ?? '-';
+                                                            $itemBrand = $item->product?->brand ?? '-';
                                                         @endphp
                                                         <tr class="hover:bg-slate-50/80 dark:hover:bg-gray-800/50 transition-colors">
                                                             <td class="px-3 py-1.5 text-center text-gray-400 font-medium">{{ $idx + 1 }}</td>
-                                                            <td class="px-3 py-1.5 font-mono text-[11px] text-gray-600 dark:text-gray-300">{{ $productCode }}</td>
                                                             <td class="px-3 py-1.5 font-semibold text-gray-900 dark:text-white">{{ $item->item_name }}</td>
-                                                            <td class="px-3 py-1.5 text-center text-gray-400 font-mono text-[11px]">-</td>
+                                                            <td class="px-3 py-1.5 text-[11px] font-medium text-sky-700 dark:text-sky-400">{{ $itemDivision }}</td>
+                                                            <td class="px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-300">{{ $itemBrand }}</td>
                                                             <td class="px-3 py-1.5 text-center font-bold text-gray-900 dark:text-white">{{ $item->quantity }} {{ $item->unit ?: 'Pcs' }}</td>
                                                             <td class="px-3 py-1.5 text-right font-mono text-gray-700 dark:text-gray-300">Rp {{ number_format($item->unit_price, 0, ',', '.') }}</td>
                                                             <td class="px-3 py-1.5 text-right font-mono">

@@ -42,16 +42,24 @@ class TopClientsChart extends ChartWidget
 
         $startDate = $this->filters['start_date'] ?? null;
         $endDate = $this->filters['end_date'] ?? null;
+        $division = $this->filters['division'] ?? null;
         $clientType = $this->filters['client_type'] ?? null;
         $clientId = $this->filters['client_id'] ?? null;
         $status = $this->filters['status'] ?? null;
 
         if ($startDate) {
-            $query->whereDate('issue_date', '>=', $startDate);
+            $query->whereDate('outbound_invoices.issue_date', '>=', $startDate);
         }
 
         if ($endDate) {
-            $query->whereDate('issue_date', '<=', $endDate);
+            $query->whereDate('outbound_invoices.issue_date', '<=', $endDate);
+        }
+
+        if ($division) {
+            $query->where(function (Builder $subQuery) use ($division): void {
+                $subQuery->where('outbound_invoices.division', $division)
+                    ->orWhereHas('items.product', fn (Builder $pq): Builder => $pq->where('division', $division));
+            });
         }
 
         if ($clientType) {
@@ -61,11 +69,11 @@ class TopClientsChart extends ChartWidget
         }
 
         if ($clientId) {
-            $query->where('client_id', $clientId);
+            $query->where('outbound_invoices.client_id', $clientId);
         }
 
         if ($status) {
-            $query->where('status', $status);
+            $query->where('outbound_invoices.status', $status);
         }
 
         return $query;
@@ -102,8 +110,8 @@ class TopClientsChart extends ChartWidget
                 [
                     'label' => 'Total Omzet (Rp)',
                     'data' => $results->pluck('total_omzet')->map(fn ($val): float => (float) $val)->toArray(),
-                    'backgroundColor' => '#3B82F6',
-                    'hoverBackgroundColor' => '#2563EB',
+                    'backgroundColor' => '#2D8A56',
+                    'hoverBackgroundColor' => '#1F4E34',
                     'borderRadius' => 6,
                 ],
             ],

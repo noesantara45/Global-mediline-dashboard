@@ -13,22 +13,27 @@ class InvoiceStatusChart extends ChartWidget
 
     protected static bool $isLazy = false;
 
-    protected int|string|array $columnSpan = 1;
-
-    protected static ?string $maxHeight = '280px';
+    /**
+     * @var int | string | array<string, int | string | null>
+     */
+    protected int|string|array $columnSpan = [
+        'default' => 'full',
+        'md' => 2,
+        'xl' => 2,
+    ];
 
     public ?string $filter = 'amount';
 
     public function getDescription(): ?string
     {
-        return 'Perbandingan tagihan lunas, dalam tempo, dan lewat jatuh tempo.';
+        return 'Lunas, dalam tempo & lewat tempo.';
     }
 
     protected function getFilters(): ?array
     {
         return [
-            'amount' => 'Nominal Rupiah (Rp)',
-            'count' => 'Jumlah Faktur',
+            'amount' => 'Nominal (Rp)',
+            'count' => 'Jml Faktur',
         ];
     }
 
@@ -67,8 +72,8 @@ class InvoiceStatusChart extends ChartWidget
                     'label' => $isCount ? 'Jumlah Faktur' : 'Nominal Tagihan',
                     'data' => [$paid, $inTempo, $overdue],
                     'backgroundColor' => [
-                        '#10B981', // Emerald - Lunas
-                        '#3B82F6', // Blue - Dalam Tempo
+                        '#2D8A56', // Medical Emerald - Lunas
+                        '#84C038', // Fresh Lime - Dalam Tempo
                         '#EF4444', // Red - Lewat Jatuh Tempo
                     ],
                     'borderWidth' => 2,
@@ -92,11 +97,19 @@ class InvoiceStatusChart extends ChartWidget
                     'position' => 'bottom',
                     'labels' => [
                         'boxWidth' => 12,
-                        'padding' => 16,
+                        'padding' => 14,
                     ],
                 ],
             ],
-            'cutout' => '65%',
+            'scales' => [
+                'x' => [
+                    'display' => false,
+                ],
+                'y' => [
+                    'display' => false,
+                ],
+            ],
+            'cutout' => '64%',
             'maintainAspectRatio' => false,
         ];
     }

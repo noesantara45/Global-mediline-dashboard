@@ -19,13 +19,13 @@ class TopSuppliersChart extends ChartWidget
 
     protected static ?string $maxHeight = '320px';
 
-    protected static ?string $heading = 'Top Supplier Pengadaan Terbesar';
+    protected static ?string $heading = 'Top Supplier Pembelian Terbesar';
 
     public ?string $filter = '5';
 
     public function getDescription(): ?string
     {
-        return 'Peringkat vendor & principal berdasarkan total nilai pengadaan barang.';
+        return 'Rekap peringkat supplier berdasarkan total nilai Inbound Invoices.';
     }
 
     protected function getFilters(): ?array
@@ -46,19 +46,21 @@ class TopSuppliersChart extends ChartWidget
         $status = $this->filters['status'] ?? null;
 
         if ($startDate) {
-            $query->whereDate('issue_date', '>=', $startDate);
+            $query->whereDate('inbound_invoices.issue_date', '>=', $startDate);
         }
 
         if ($endDate) {
-            $query->whereDate('issue_date', '<=', $endDate);
+            $query->whereDate('inbound_invoices.issue_date', '<=', $endDate);
         }
 
         if ($supplierId) {
-            $query->where('supplier_id', $supplierId);
+            $query->where('inbound_invoices.supplier_id', $supplierId);
         }
 
         if ($status) {
-            $query->where('status', $status);
+            $query->where('inbound_invoices.status', $status);
+        } else {
+            $query->where('inbound_invoices.status', '!=', 'Cancelled');
         }
 
         return $query;

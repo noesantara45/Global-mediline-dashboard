@@ -14,4 +14,5 @@ Route::get('/login', function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('/print/outbound-invoice/{invoice}', [PdfController::class, 'printOutboundInvoice'])->name('outbound-invoice.pdf');
     Route::get('/print/surat-jalan/{invoice}', [PdfController::class, 'printSuratJalan'])->name('surat-jalan.pdf');
+    Route::get('/print/inbound-invoice/{invoice}', [PdfController::class, 'printInboundInvoice'])->name('inbound-invoice.pdf');
 });

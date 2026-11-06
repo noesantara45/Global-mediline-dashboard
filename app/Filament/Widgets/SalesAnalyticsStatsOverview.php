@@ -24,6 +24,7 @@ class SalesAnalyticsStatsOverview extends BaseWidget
 
         $startDate = $this->filters['start_date'] ?? null;
         $endDate = $this->filters['end_date'] ?? null;
+        $division = $this->filters['division'] ?? null;
         $clientType = $this->filters['client_type'] ?? null;
         $clientId = $this->filters['client_id'] ?? null;
         $status = $this->filters['status'] ?? null;
@@ -34,6 +35,13 @@ class SalesAnalyticsStatsOverview extends BaseWidget
 
         if ($endDate) {
             $query->whereDate('issue_date', '<=', $endDate);
+        }
+
+        if ($division) {
+            $query->where(function (Builder $subQuery) use ($division): void {
+                $subQuery->where('division', $division)
+                    ->orWhereHas('items.product', fn (Builder $pq): Builder => $pq->where('division', $division));
+            });
         }
 
         if ($clientType) {

@@ -165,27 +165,37 @@
     <?php
         // Kop Surat Image
         $kopPath = public_path('images/kop-surat.png');
-        $kopData = file_get_contents($kopPath);
-        $kopType = mime_content_type($kopPath) ?: 'image/png';
-        $kopBase64 = 'data:' . $kopType . ';base64,' . base64_encode($kopData);
+        $kopBase64 = null;
+        if (is_file($kopPath)) {
+            $kopData = file_get_contents($kopPath);
+            $kopType = mime_content_type($kopPath) ?: 'image/png';
+            $kopBase64 = 'data:' . $kopType . ';base64,' . base64_encode($kopData);
+        }
         
         // Watermark (opsional, masih pakai logo-gm-clear.png jika mau)
         $wmPath = public_path('images/logo-gm-clear.png');
-        $wmData = file_get_contents($wmPath);
-        $wmType = mime_content_type($wmPath) ?: 'image/png';
-        $wmBase64 = 'data:' . $wmType . ';base64,' . base64_encode($wmData);
+        $wmBase64 = null;
+        if (is_file($wmPath)) {
+            $wmData = file_get_contents($wmPath);
+            $wmType = mime_content_type($wmPath) ?: 'image/png';
+            $wmBase64 = 'data:' . $wmType . ';base64,' . base64_encode($wmData);
+        }
     ?>
 
     <!-- Watermark Logo -->
-    <img src="{{ $wmBase64 }}" class="watermark">
+    @if($wmBase64)
+        <img src="{{ $wmBase64 }}" class="watermark">
+    @endif
 
     <!-- Pita Hijau Bawah (Bisa dipertahankan atau dihapus) -->
     <div class="footer-deco"></div>
 
     <!-- Kop Surat Full Width -->
-    <div style="text-align: center; margin-bottom: 20px; margin-top: -20px;">
-        <img src="{{ $kopBase64 }}" style="width: 100%; max-width: 800px;">
-    </div>
+    @if($kopBase64)
+        <div style="text-align: center; margin-bottom: 20px; margin-top: -20px;">
+            <img src="{{ $kopBase64 }}" style="width: 100%; max-width: 800px;">
+        </div>
+    @endif
     
     <div class="title">FAKTUR PENJUALAN</div>
 
@@ -193,7 +203,7 @@
         <tr>
             <td width="12%"><strong>Customer</strong></td>
             <td width="2%">:</td>
-            <td width="46%">{{ $invoice->client->name }}</td>
+            <td width="46%">{{ $invoice->client?->name ?? '-' }}</td>
             
             <td width="15%"><strong>No Faktur</strong></td>
             <td width="2%">:</td>
@@ -202,20 +212,20 @@
         <tr>
             <td><strong>Telepon</strong></td>
             <td>:</td>
-            <td>{{ $invoice->client->phone ?? '-' }}</td>
+            <td>{{ $invoice->client?->phone ?? '-' }}</td>
             
             <td><strong>Tanggal</strong></td>
             <td>:</td>
-            <td>{{ \Carbon\Carbon::parse($invoice->issue_date)->format('d M Y') }}</td>
+            <td>{{ $invoice->issue_date ? \Carbon\Carbon::parse($invoice->issue_date)->format('d M Y') : '-' }}</td>
         </tr>
         <tr>
             <td><strong>Alamat</strong></td>
             <td>:</td>
-            <td>{{ $invoice->client->address ?? '-' }}</td>
+            <td>{{ $invoice->client?->address ?? '-' }}</td>
             
             <td><strong>Jatuh Tempo</strong></td>
             <td>:</td>
-            <td>{{ \Carbon\Carbon::parse($invoice->due_date)->format('d M Y') }}</td>
+            <td>{{ $invoice->due_date ? \Carbon\Carbon::parse($invoice->due_date)->format('d M Y') : '-' }}</td>
         </tr>
     </table>
 

@@ -24,30 +24,35 @@ class TopClientsTableWidget extends BaseWidget
     {
         $startDate = $this->filters['start_date'] ?? null;
         $endDate = $this->filters['end_date'] ?? null;
+        $division = $this->filters['division'] ?? null;
         $clientType = $this->filters['client_type'] ?? null;
         $clientId = $this->filters['client_id'] ?? null;
         $status = $this->filters['status'] ?? null;
 
+        $invoiceConstraint = function (Builder $q) use ($startDate, $endDate, $division, $status): void {
+            $q->when($startDate, fn (Builder $sq, string $d): Builder => $sq->whereDate('issue_date', '>=', $d))
+                ->when($endDate, fn (Builder $sq, string $d): Builder => $sq->whereDate('issue_date', '<=', $d))
+                ->when($division, function (Builder $sq, string $div): Builder {
+                    return $sq->where(function (Builder $divQuery) use ($div): void {
+                        $divQuery->where('division', $div)
+                            ->orWhereHas('items.product', fn (Builder $pq): Builder => $pq->where('division', $div));
+                    });
+                })
+                ->when($status, fn (Builder $sq, string $s): Builder => $sq->where('status', $s));
+        };
+
         return $table
             ->query(
                 Client::query()
+                    ->whereHas('outboundInvoices', $invoiceConstraint)
                     ->withSum([
-                        'outboundInvoices as total_sales' => function (Builder $q) use ($startDate, $endDate, $status): void {
-                            $q->when($startDate, fn (Builder $sq, $d): Builder => $sq->whereDate('issue_date', '>=', $d))
-                                ->when($endDate, fn (Builder $sq, $d): Builder => $sq->whereDate('issue_date', '<=', $d))
-                                ->when($status, fn (Builder $sq, $s): Builder => $sq->where('status', $s));
-                        },
+                        'outboundInvoices as total_sales' => $invoiceConstraint,
                     ], 'total_amount')
                     ->withCount([
-                        'outboundInvoices as invoice_count' => function (Builder $q) use ($startDate, $endDate, $status): void {
-                            $q->when($startDate, fn (Builder $sq, $d): Builder => $sq->whereDate('issue_date', '>=', $d))
-                                ->when($endDate, fn (Builder $sq, $d): Builder => $sq->whereDate('issue_date', '<=', $d))
-                                ->when($status, fn (Builder $sq, $s): Builder => $sq->where('status', $s));
-                        },
+                        'outboundInvoices as invoice_count' => $invoiceConstraint,
                     ])
                     ->when($clientType, fn (Builder $q, $t): Builder => $q->where('type', $t))
                     ->when($clientId, fn (Builder $q, $id): Builder => $q->where('id', $id))
-                    ->having('total_sales', '>', 0)
                     ->orderByDesc('total_sales')
             )
             ->heading('Rincian Kontribusi Klien & Rumah Sakit')

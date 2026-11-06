@@ -66,6 +66,11 @@ class LaporanDetailPenjualan extends Page implements HasTable
                     ->sortable()
                     ->weight('semibold'),
 
+                Tables\Columns\TextColumn::make('division')
+                    ->label('Divisi')
+                    ->badge()
+                    ->color(fn (?string $state): string => Product::divisionColor($state)),
+
                 Tables\Columns\TextColumn::make('brand')
                     ->label('Merek')
                     ->badge()
@@ -115,16 +120,18 @@ class LaporanDetailPenjualan extends Page implements HasTable
             ])
             ->filters([
                 Tables\Filters\Filter::make('issue_date')
-                    ->columnSpan(['default' => 1, 'sm' => 2, 'xl' => 2])
-                    ->columns(['default' => 1, 'sm' => 2, 'xl' => 2])
+                    ->columnSpan(['default' => 1, 'sm' => 2, 'lg' => 2, 'xl' => 2])
+                    ->columns(['default' => 1, 'sm' => 2, 'lg' => 2, 'xl' => 2])
                     ->form([
                         Forms\Components\DatePicker::make('from')
                             ->label('Dari Tanggal')
+                            ->placeholder('dd/mm/yyyy')
                             ->native(false)
                             ->displayFormat('d/m/Y')
                             ->closeOnDateSelection(),
                         Forms\Components\DatePicker::make('until')
                             ->label('Sampai Tanggal')
+                            ->placeholder('dd/mm/yyyy')
                             ->native(false)
                             ->displayFormat('d/m/Y')
                             ->closeOnDateSelection(),
@@ -150,7 +157,7 @@ class LaporanDetailPenjualan extends Page implements HasTable
                     ->form([
                         Forms\Components\TextInput::make('code')
                             ->label('Kode Faktur')
-                            ->placeholder('Kode Faktur...')
+                            ->placeholder('No Faktur...')
                             ->live(debounce: 500),
                     ])
                     ->query(function ($query, array $data) {
@@ -169,14 +176,14 @@ class LaporanDetailPenjualan extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('client_id')
                     ->label('Customer')
-                    ->placeholder('Customer')
+                    ->placeholder('Semua')
                     ->relationship('invoice.client', 'name')
                     ->searchable()
                     ->preload(),
 
                 Tables\Filters\SelectFilter::make('brand')
                     ->label('Merek')
-                    ->placeholder('Merek')
+                    ->placeholder('Semua')
                     ->options(
                         fn () => Product::whereNotNull('brand')
                             ->where('brand', '!=', '')
@@ -192,7 +199,7 @@ class LaporanDetailPenjualan extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('sales')
                     ->label('Sales')
-                    ->placeholder('Sales')
+                    ->placeholder('Semua')
                     ->options(
                         fn () => OutboundInvoice::query()
                             ->whereNotNull('sales')
@@ -210,27 +217,33 @@ class LaporanDetailPenjualan extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('division')
                     ->label('Divisi')
-                    ->placeholder('Divisi')
-                    ->options(
-                        fn () => OutboundInvoice::query()
+                    ->placeholder('Semua')
+                    ->options(function (): array {
+                        $existing = OutboundInvoice::query()
                             ->whereNotNull('division')
                             ->where('division', '!=', '')
                             ->distinct()
                             ->pluck('division', 'division')
-                            ->toArray()
-                    )
-                    ->query(function ($query, array $data) {
+                            ->toArray();
+
+                        return array_merge(Product::divisionOptions(), $existing);
+                    })
+                    ->query(function ($query, array $data): void {
                         if (! empty($data['value'])) {
-                            $query->where('outbound_invoices.division', $data['value']);
+                            $division = $data['value'];
+                            $query->where(function ($subQuery) use ($division): void {
+                                $subQuery->where('outbound_invoices.division', $division)
+                                    ->orWhereHas('product', fn ($pq) => $pq->where('division', $division));
+                            });
                         }
                     })
                     ->searchable(),
             ], layout: FiltersLayout::AboveContent)
             ->filtersFormColumns([
                 'default' => 1,
-                'sm' => 2,
-                'md' => 3,
-                'xl' => 6,
+                'sm' => 3,
+                'lg' => 4,
+                'xl' => 7,
             ])
             ->actions([
                 Tables\Actions\Action::make('edit')

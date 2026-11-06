@@ -32,7 +32,7 @@ class OutboundInvoiceResource extends Resource
                             ->relationship('client', 'name')
                             ->required()
                             ->live()
-                            ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state) {
+                            ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state): void {
                                 // Auto set dates when client is selected
                                 if (! $get('issue_date')) {
                                     $set('issue_date', now()->format('Y-m-d'));
@@ -68,12 +68,22 @@ class OutboundInvoiceResource extends Resource
                             ->required(),
                         Forms\Components\TextInput::make('sales')
                             ->label('Sales')
-                            ->placeholder('Contoh: Microbiologi, Diagnostic 2, NTB 2')
+                            ->placeholder('Contoh: Sales Area 1, NTB 2')
                             ->maxLength(255),
-                        Forms\Components\TextInput::make('division')
+                        Forms\Components\Select::make('division')
                             ->label('Divisi')
-                            ->placeholder('Contoh: Reagen, Alkes, Laboratorium')
-                            ->maxLength(255),
+                            ->placeholder('Otomatis dari barang pertama / pilih divisi...')
+                            ->options(function (): array {
+                                $existing = OutboundInvoice::query()
+                                    ->whereNotNull('division')
+                                    ->where('division', '!=', '')
+                                    ->distinct()
+                                    ->pluck('division', 'division')
+                                    ->toArray();
+
+                                return array_merge(Product::divisionOptions(), $existing);
+                            })
+                            ->searchable(),
                     ])->columns(2),
 
                 Forms\Components\Section::make('Daftar Barang (Items)')
@@ -83,11 +93,11 @@ class OutboundInvoiceResource extends Resource
                             ->schema([
                                 Forms\Components\Select::make('item_name')
                                     ->label('Nama Barang')
-                                    ->options(Product::pluck('name', 'name'))
+                                    ->options(fn (): array => self::groupedProductOptions())
                                     ->searchable()
                                     ->required()
                                     ->live()
-                                    ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state) {
+                                    ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state): void {
                                         if (! $state) {
                                             return;
                                         }
@@ -97,6 +107,10 @@ class OutboundInvoiceResource extends Resource
                                             $set('unit', $product->unit);
                                             $set('unit_price', $product->price);
                                             self::updateItemSubtotal($set, $get);
+
+                                            if (blank($get('../../division')) && filled($product->division)) {
+                                                $set('../../division', $product->division);
+                                            }
                                         }
                                     })
                                     ->columnSpan(3),
@@ -171,7 +185,28 @@ class OutboundInvoiceResource extends Resource
             ]);
     }
 
-    public static function updateItemSubtotal(Forms\Set $set, Forms\Get $get)
+    /**
+     * @return array<string, array<string, string>|string>
+     */
+    public static function groupedProductOptions(): array
+    {
+        $products = Product::query()->orderBy('division')->orderBy('name')->get();
+        $hasDivision = $products->contains(fn (Product $product): bool => filled($product->division));
+
+        if (! $hasDivision) {
+            return $products->pluck('name', 'name')->toArray();
+        }
+
+        $grouped = [];
+        foreach ($products as $product) {
+            $groupLabel = $product->division ?: 'Belum Ada Divisi';
+            $grouped[$groupLabel][$product->name] = $product->name;
+        }
+
+        return $grouped;
+    }
+
+    public static function updateItemSubtotal(Forms\Set $set, Forms\Get $get): void
     {
         $qty = (float) $get('quantity') ?: 0;
         $price = (float) $get('unit_price') ?: 0;
@@ -181,7 +216,7 @@ class OutboundInvoiceResource extends Resource
         $set('subtotal', round($subtotal));
     }
 
-    public static function updateTotals(Forms\Set $set, Forms\Get $get)
+    public static function updateTotals(Forms\Set $set, Forms\Get $get): void
     {
         $items = $get('items') ?? [];
         $subtotalAmount = 0;
@@ -213,6 +248,9 @@ class OutboundInvoiceResource extends Resource
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('division')
                     ->label('Divisi')
+                    ->badge()
+                    ->color(fn (?string $state): string => Product::divisionColor($state))
+                    ->placeholder('-')
                     ->searchable()
                     ->sortable()
                     ->toggleable(),
@@ -254,7 +292,9 @@ class OutboundInvoiceResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('division')
+                    ->label('Divisi')
+                    ->options(Product::divisionOptions()),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -262,13 +302,13 @@ class OutboundInvoiceResource extends Resource
                     ->label('Cetak PDF')
                     ->icon('heroicon-o-printer')
                     ->color('success')
-                    ->url(fn (OutboundInvoice $record) => route('outbound-invoice.pdf', $record))
+                    ->url(fn (OutboundInvoice $record): string => route('outbound-invoice.pdf', $record))
                     ->openUrlInNewTab(),
                 Tables\Actions\Action::make('surat_jalan')
                     ->label('Surat Jalan')
                     ->icon('heroicon-o-truck')
                     ->color('info')
-                    ->url(fn (OutboundInvoice $record) => route('surat-jalan.pdf', $record))
+                    ->url(fn (OutboundInvoice $record): string => route('surat-jalan.pdf', $record))
                     ->openUrlInNewTab(),
             ])
             ->bulkActions([

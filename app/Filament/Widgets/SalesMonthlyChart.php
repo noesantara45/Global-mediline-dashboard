@@ -26,16 +26,24 @@ class SalesMonthlyChart extends ChartWidget
 
     public function getDescription(): ?string
     {
-        return 'Pergerakan nilai omzet penjualan sesuai filter periode aktif.';
+        return 'Pergerakan nilai omzet penjualan sesuai filter periode dan divisi aktif.';
     }
 
     protected function getFilteredQuery(): Builder
     {
         $query = OutboundInvoice::query();
 
+        $division = $this->filters['division'] ?? null;
         $clientType = $this->filters['client_type'] ?? null;
         $clientId = $this->filters['client_id'] ?? null;
         $status = $this->filters['status'] ?? null;
+
+        if ($division) {
+            $query->where(function (Builder $subQuery) use ($division): void {
+                $subQuery->where('division', $division)
+                    ->orWhereHas('items.product', fn (Builder $pq): Builder => $pq->where('division', $division));
+            });
+        }
 
         if ($clientType) {
             $query->whereHas('client', function (Builder $q) use ($clientType): void {
@@ -78,9 +86,9 @@ class SalesMonthlyChart extends ChartWidget
                 [
                     'label' => 'Total Penjualan (Rp)',
                     'data' => $data->map(fn (TrendValue $value): float => (float) $value->aggregate),
-                    'backgroundColor' => 'rgba(16, 185, 129, 0.15)',
-                    'borderColor' => '#10B981',
-                    'pointBackgroundColor' => '#10B981',
+                    'backgroundColor' => 'rgba(45, 138, 86, 0.16)',
+                    'borderColor' => '#2D8A56',
+                    'pointBackgroundColor' => '#1F4E34',
                     'pointBorderColor' => '#ffffff',
                     'pointHoverRadius' => 6,
                     'borderWidth' => 2,

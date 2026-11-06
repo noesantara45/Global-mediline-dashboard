@@ -8,9 +8,11 @@ use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Url;
 
 class LaporanRekapBarang extends Page implements HasTable
 {
@@ -28,32 +30,70 @@ class LaporanRekapBarang extends Page implements HasTable
 
     protected static string $view = 'filament.pages.laporan-rekap-barang';
 
+    #[Url]
+    public string $activeDivision = 'all';
+
+    public function setDivision(string $division): void
+    {
+        $this->activeDivision = $division;
+        $this->resetTable();
+    }
+
+    public function resetAllFilters(): void
+    {
+        $this->activeDivision = 'all';
+        $this->resetTableFiltersForm();
+    }
+
+    /**
+     * @return array<string, array{label: string, count: int, color: string}>
+     */
+    public function getDivisionTabs(): array
+    {
+        $counts = Product::query()
+            ->selectRaw('division, COUNT(*) as aggregate')
+            ->groupBy('division')
+            ->pluck('aggregate', 'division');
+
+        $tabs = [
+            'all' => [
+                'label' => 'Semua Divisi',
+                'count' => (int) $counts->sum(),
+                'color' => 'gray',
+            ],
+        ];
+
+        foreach (Product::divisionOptions() as $divisionKey => $divisionLabel) {
+            $tabs[$divisionKey] = [
+                'label' => $divisionLabel,
+                'count' => (int) ($counts[$divisionKey] ?? 0),
+                'color' => Product::divisionColor($divisionKey),
+            ];
+        }
+
+        return $tabs;
+    }
+
     public function table(Table $table): Table
     {
         return $table
             ->query(
                 Product::query()
+                    ->when(
+                        $this->activeDivision !== 'all',
+                        fn (Builder $query): Builder => $query->where('division', $this->activeDivision)
+                    )
                     ->withSum('outboundItems as total_qty_sold', 'quantity')
                     ->withSum('outboundItems as total_omzet', 'subtotal')
                     ->withCount('outboundItems as total_transactions')
             )
-            ->heading('Tabel Rekapitulasi Produk')
-            ->description('Analisis performa penjualan, kuantitas keluar, dan perolehan omzet per SKU barang.')
-            ->headerActions([
-                Tables\Actions\Action::make('create_product')
-                    ->label('Tambah Produk')
-                    ->icon('heroicon-m-plus')
-                    ->color('primary')
-                    ->size('sm')
-                    ->url(fn (): string => ProductResource::getUrl('create')),
-            ])
             ->columns([
                 Tables\Columns\ImageColumn::make('photo_url')
                     ->label('Foto')
                     ->state(fn (Product $record): ?string => $record->photo_url)
                     ->defaultImageUrl(asset('images/placeholder-product.svg'))
                     ->circular()
-                    ->size(46)
+                    ->size(34)
                     ->alignCenter(),
 
                 Tables\Columns\TextColumn::make('name')
@@ -61,8 +101,15 @@ class LaporanRekapBarang extends Page implements HasTable
                     ->searchable()
                     ->sortable()
                     ->weight('bold')
-                    ->description(fn (Product $record): ?string => $record->description ? Str::limit($record->description, 40) : null)
-                    ->wrap(),
+                    ->description(fn (Product $record): ?string => $record->description ? Str::limit($record->description, 45) : null),
+
+                Tables\Columns\TextColumn::make('division')
+                    ->label('Divisi')
+                    ->badge()
+                    ->color(fn (?string $state): string => Product::divisionColor($state))
+                    ->placeholder('Belum diatur')
+                    ->searchable()
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('brand')
                     ->label('Merek')
@@ -76,7 +123,7 @@ class LaporanRekapBarang extends Page implements HasTable
                 Tables\Columns\TextColumn::make('unit')
                     ->label('Satuan')
                     ->badge()
-                    ->color('slate')
+                    ->color('gray')
                     ->alignCenter()
                     ->default('Pcs'),
 
@@ -137,8 +184,14 @@ class LaporanRekapBarang extends Page implements HasTable
                     ->url(fn (Product $record): string => ProductResource::getUrl('edit', ['record' => $record])),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('division')
+                    ->label('Divisi')
+                    ->placeholder('Semua')
+                    ->options(Product::divisionOptions()),
+
                 Tables\Filters\SelectFilter::make('brand')
                     ->label('Merek')
+                    ->placeholder('Semua')
                     ->options(
                         fn (): array => Product::whereNotNull('brand')
                             ->where('brand', '!=', '')
@@ -161,6 +214,7 @@ class LaporanRekapBarang extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('unit')
                     ->label('Satuan')
+                    ->placeholder('Semua')
                     ->options(
                         fn (): array => Product::whereNotNull('unit')
                             ->where('unit', '!=', '')
@@ -168,9 +222,15 @@ class LaporanRekapBarang extends Page implements HasTable
                             ->pluck('unit', 'unit')
                             ->toArray()
                     ),
+            ], layout: FiltersLayout::AboveContent)
+            ->filtersFormColumns([
+                'default' => 1,
+                'sm' => 2,
+                'md' => 4,
+                'xl' => 4,
             ])
             ->emptyStateHeading('Tidak Ada Data Produk')
-            ->emptyStateDescription('Belum ada produk yang sesuai dengan kriteria pencarian atau filter yang dipilih.')
+            ->emptyStateDescription('Belum ada produk yang sesuai dengan kriteria divisi, pencarian, atau filter yang dipilih.')
             ->emptyStateIcon('heroicon-o-cube')
             ->defaultSort('total_omzet', 'desc')
             ->striped();

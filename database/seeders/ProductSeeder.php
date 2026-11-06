@@ -15,6 +15,7 @@ class ProductSeeder extends Seeder
         $products = [
             [
                 'name' => 'Hematology',
+                'division' => Product::DIVISION_DIAGNOSTIC,
                 'brand' => 'DIRUI',
                 'photo' => 'hematology.png',
                 'description' => 'Multi-Parameter Access.',
@@ -23,6 +24,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'Dry Electrolyte',
+                'division' => Product::DIVISION_DIAGNOSTIC,
                 'brand' => 'Prolyte',
                 'photo' => 'dry-electrolyte.png',
                 'description' => 'Electrolyte Analyzer',
@@ -31,6 +33,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'IMMUNOASSAY',
+                'division' => Product::DIVISION_DIAGNOSTIC,
                 'brand' => 'SD BIOSENSOR',
                 'photo' => 'immunoassay-fluorescence.png',
                 'description' => "SD Biosensor, fLOWRESENCE\niMMUNOASSAY",
@@ -39,6 +42,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'BLOOD CULTURE',
+                'division' => Product::DIVISION_MICROBIOLOGY,
                 'brand' => 'Zhuhai Meihua',
                 'photo' => 'blood-culture.png',
                 'description' => 'KSO Unit. Zhuhai BT24',
@@ -47,6 +51,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'IMMUNOASSAY CLIA',
+                'division' => Product::DIVISION_DIAGNOSTIC,
                 'brand' => 'SD BIOSENSOR',
                 'photo' => 'immunoassay-clia.png',
                 'description' => "SD BIOSENSOR, Chemiluminescence\nImmunoassay (CLIA)",
@@ -55,6 +60,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'Real Time PCR',
+                'division' => Product::DIVISION_DIAGNOSTIC,
                 'brand' => 'SD BIOSENSOR',
                 'photo' => 'real-time-pcr.png',
                 'description' => 'SD BIOSENSOR M10',
@@ -63,6 +69,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'Electrolyte Analyzer',
+                'division' => Product::DIVISION_DIAGNOSTIC,
                 'brand' => 'Prolyte',
                 'photo' => 'electrolyte-analyzer.png',
                 'description' => 'Prolyte, Electrolyte Analyzer',
@@ -71,6 +78,7 @@ class ProductSeeder extends Seeder
             ],
             [
                 'name' => 'HPLC Automatic',
+                'division' => Product::DIVISION_DIAGNOSTIC,
                 'brand' => 'BIO-RAD',
                 'photo' => 'hplc-automatic.png',
                 'description' => "BIORAD D10, HPLC AUTOMATIC\nANALYZER",

@@ -12,7 +12,9 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LaporanPenjualan extends Page implements HasTable
 {
@@ -37,7 +39,6 @@ class LaporanPenjualan extends Page implements HasTable
             ->query(
                 OutboundInvoice::query()
                     ->with(['client', 'items.product'])
-                    ->latest('issue_date')
             )
             ->columns([
                 Tables\Columns\TextColumn::make('index')
@@ -66,6 +67,8 @@ class LaporanPenjualan extends Page implements HasTable
 
                 Tables\Columns\TextColumn::make('division')
                     ->label('Divisi')
+                    ->badge()
+                    ->color(fn (?string $state): string => Product::divisionColor($state))
                     ->searchable()
                     ->sortable()
                     ->default('-'),
@@ -78,16 +81,22 @@ class LaporanPenjualan extends Page implements HasTable
                 Tables\Columns\TextColumn::make('gross_sale')
                     ->label('Gross Sale')
                     ->money('IDR', locale: 'id')
-                    ->sortable(query: function ($query, string $direction) {
-                        return $query->orderBy('subtotal_amount', $direction);
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        $sqlDirection = $direction === 'desc' ? 'DESC' : 'ASC';
+
+                        return $query->orderByRaw(
+                            "COALESCE(NULLIF((SELECT SUM(quantity * unit_price) FROM outbound_invoice_items WHERE outbound_invoice_items.outbound_invoice_id = outbound_invoices.id), 0), outbound_invoices.subtotal_amount) {$sqlDirection}"
+                        );
                     })
                     ->summarize(
-                        Tables\Columns\Summarizers\Summarizer::make()
+                        Tables\Columns\Summarizers\Summarizer::make('total_gross')
                             ->label('Total Gross')
-                            ->using(function ($query) {
-                                $ids = (clone $query)->pluck('outbound_invoices.id');
+                            ->using(function ($query): float {
+                                $ids = (clone $query)
+                                    ->where('outbound_invoices.status', '!=', 'Cancelled')
+                                    ->pluck('outbound_invoices.id');
                                 if ($ids->isEmpty()) {
-                                    return 0;
+                                    return 0.0;
                                 }
 
                                 return (float) OutboundInvoiceItem::whereIn('outbound_invoice_id', $ids)
@@ -100,13 +109,22 @@ class LaporanPenjualan extends Page implements HasTable
                 Tables\Columns\TextColumn::make('total_discount')
                     ->label('Diskon')
                     ->money('IDR', locale: 'id')
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        $sqlDirection = $direction === 'desc' ? 'DESC' : 'ASC';
+
+                        return $query->orderByRaw(
+                            "COALESCE((SELECT SUM(CASE WHEN (quantity * unit_price) > subtotal THEN (quantity * unit_price) - subtotal ELSE 0 END) FROM outbound_invoice_items WHERE outbound_invoice_items.outbound_invoice_id = outbound_invoices.id), 0) {$sqlDirection}"
+                        );
+                    })
                     ->summarize(
-                        Tables\Columns\Summarizers\Summarizer::make()
+                        Tables\Columns\Summarizers\Summarizer::make('total_discount')
                             ->label('Total Diskon')
-                            ->using(function ($query) {
-                                $ids = (clone $query)->pluck('outbound_invoices.id');
+                            ->using(function ($query): float {
+                                $ids = (clone $query)
+                                    ->where('outbound_invoices.status', '!=', 'Cancelled')
+                                    ->pluck('outbound_invoices.id');
                                 if ($ids->isEmpty()) {
-                                    return 0;
+                                    return 0.0;
                                 }
 
                                 return (float) OutboundInvoiceItem::whereIn('outbound_invoice_id', $ids)
@@ -121,8 +139,9 @@ class LaporanPenjualan extends Page implements HasTable
                     ->money('IDR', locale: 'id')
                     ->sortable()
                     ->summarize(
-                        Tables\Columns\Summarizers\Sum::make()
+                        Tables\Columns\Summarizers\Sum::make('total_ppn')
                             ->label('Total PPN')
+                            ->query(fn ($query) => $query->where('outbound_invoices.status', '!=', 'Cancelled'))
                             ->money('IDR', locale: 'id')
                     ),
 
@@ -131,8 +150,9 @@ class LaporanPenjualan extends Page implements HasTable
                     ->money('IDR', locale: 'id')
                     ->sortable()
                     ->summarize(
-                        Tables\Columns\Summarizers\Sum::make()
+                        Tables\Columns\Summarizers\Sum::make('total_subtotal')
                             ->label('Total Subtotal')
+                            ->query(fn ($query) => $query->where('outbound_invoices.status', '!=', 'Cancelled'))
                             ->money('IDR', locale: 'id')
                     ),
 
@@ -142,8 +162,9 @@ class LaporanPenjualan extends Page implements HasTable
                     ->weight('bold')
                     ->sortable()
                     ->summarize(
-                        Tables\Columns\Summarizers\Sum::make()
+                        Tables\Columns\Summarizers\Sum::make('total_net_sale')
                             ->label('Total Net Sale')
+                            ->query(fn ($query) => $query->where('outbound_invoices.status', '!=', 'Cancelled'))
                             ->money('IDR', locale: 'id')
                     ),
 
@@ -155,6 +176,7 @@ class LaporanPenjualan extends Page implements HasTable
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->badge()
+                    ->sortable()
                     ->colors([
                         'danger' => 'Unpaid',
                         'warning' => 'Partial',
@@ -164,16 +186,18 @@ class LaporanPenjualan extends Page implements HasTable
             ])
             ->filters([
                 Tables\Filters\Filter::make('issue_date')
-                    ->columnSpan(['default' => 1, 'sm' => 2, 'xl' => 2])
-                    ->columns(['default' => 1, 'sm' => 2, 'xl' => 2])
+                    ->columnSpan(['default' => 1, 'sm' => 2, 'lg' => 2, 'xl' => 2])
+                    ->columns(['default' => 1, 'sm' => 2, 'lg' => 2, 'xl' => 2])
                     ->form([
                         Forms\Components\DatePicker::make('from')
                             ->label('Dari Tanggal')
+                            ->placeholder('dd/mm/yyyy')
                             ->native(false)
                             ->displayFormat('d/m/Y')
                             ->closeOnDateSelection(),
                         Forms\Components\DatePicker::make('until')
                             ->label('Sampai Tanggal')
+                            ->placeholder('dd/mm/yyyy')
                             ->native(false)
                             ->displayFormat('d/m/Y')
                             ->closeOnDateSelection(),
@@ -199,7 +223,7 @@ class LaporanPenjualan extends Page implements HasTable
                     ->form([
                         Forms\Components\TextInput::make('code')
                             ->label('Kode Faktur')
-                            ->placeholder('Kode Faktur...')
+                            ->placeholder('No Faktur...')
                             ->live(debounce: 500),
                     ])
                     ->query(function ($query, array $data) {
@@ -218,14 +242,14 @@ class LaporanPenjualan extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('client_id')
                     ->label('Customer')
-                    ->placeholder('Customer')
+                    ->placeholder('Semua')
                     ->relationship('client', 'name')
                     ->searchable()
                     ->preload(),
 
                 Tables\Filters\SelectFilter::make('brand')
                     ->label('Merek')
-                    ->placeholder('Merek')
+                    ->placeholder('Semua')
                     ->options(
                         fn () => Product::whereNotNull('brand')
                             ->where('brand', '!=', '')
@@ -241,7 +265,7 @@ class LaporanPenjualan extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('sales')
                     ->label('Sales')
-                    ->placeholder('Sales')
+                    ->placeholder('Semua')
                     ->options(fn () => OutboundInvoice::query()
                         ->whereNotNull('sales')
                         ->where('sales', '!=', '')
@@ -253,19 +277,31 @@ class LaporanPenjualan extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('division')
                     ->label('Divisi')
-                    ->placeholder('Divisi')
-                    ->options(fn () => OutboundInvoice::query()
-                        ->whereNotNull('division')
-                        ->where('division', '!=', '')
-                        ->distinct()
-                        ->pluck('division', 'division')
-                        ->toArray()
-                    )
+                    ->placeholder('Semua')
+                    ->options(function (): array {
+                        $existing = OutboundInvoice::query()
+                            ->whereNotNull('division')
+                            ->where('division', '!=', '')
+                            ->distinct()
+                            ->pluck('division', 'division')
+                            ->toArray();
+
+                        return array_merge(Product::divisionOptions(), $existing);
+                    })
+                    ->query(function ($query, array $data): void {
+                        if (! empty($data['value'])) {
+                            $division = $data['value'];
+                            $query->where(function ($subQuery) use ($division): void {
+                                $subQuery->where('outbound_invoices.division', $division)
+                                    ->orWhereHas('items.product', fn ($pq) => $pq->where('division', $division));
+                            });
+                        }
+                    })
                     ->searchable(),
 
                 Tables\Filters\SelectFilter::make('status')
-                    ->label('Status Pembayaran')
-                    ->placeholder('Status Pembayaran')
+                    ->label('Status Bayar')
+                    ->placeholder('Semua')
                     ->options([
                         'Paid' => 'Paid (Lunas)',
                         'Unpaid' => 'Unpaid (Belum Lunas)',
@@ -276,38 +312,46 @@ class LaporanPenjualan extends Page implements HasTable
                 Tables\Filters\Filter::make('due_condition')
                     ->form([
                         Forms\Components\Select::make('condition')
-                            ->label('Status Jatuh Tempo')
+                            ->label('Jatuh Tempo')
                             ->placeholder('Semua')
                             ->options([
                                 'overdue' => 'Lewat Jatuh Tempo (Overdue)',
                                 'due_this_month' => 'Jatuh Tempo Bulan Ini',
                             ]),
                     ])
-                    ->query(function ($query, array $data) {
+                    ->query(function (Builder $query, array $data): Builder {
                         return $query
-                            ->when(($data['condition'] ?? null) === 'overdue', function ($q) {
-                                $q->where('status', '!=', 'Paid')
-                                    ->whereDate('due_date', '<', now());
+                            ->when(($data['condition'] ?? null) === 'overdue', function (Builder $q): void {
+                                $q->whereIn('outbound_invoices.status', ['Unpaid', 'Partial'])
+                                    ->whereDate('due_date', '<', now()->toDateString());
                             })
-                            ->when(($data['condition'] ?? null) === 'due_this_month', function ($q) {
-                                $q->whereMonth('due_date', now()->month)
+                            ->when(($data['condition'] ?? null) === 'due_this_month', function (Builder $q): void {
+                                $q->where('outbound_invoices.status', '!=', 'Cancelled')
+                                    ->whereMonth('due_date', now()->month)
                                     ->whereYear('due_date', now()->year);
                             });
+                    })
+                    ->indicateUsing(function (array $data): ?string {
+                        return match ($data['condition'] ?? null) {
+                            'overdue' => 'Status Jatuh Tempo: Lewat Jatuh Tempo (Overdue)',
+                            'due_this_month' => 'Status Jatuh Tempo: Jatuh Tempo Bulan Ini',
+                            default => null,
+                        };
                     }),
             ], layout: FiltersLayout::AboveContent)
             ->filtersFormColumns([
                 'default' => 1,
-                'sm' => 2,
-                'md' => 3,
-                'xl' => 6,
+                'sm' => 3,
+                'lg' => 5,
+                'xl' => 9,
             ])
             ->headerActions([
                 Tables\Actions\Action::make('export_csv')
                     ->label('Export Rekap Jual')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('success')
-                    ->action(function ($livewire) {
-                        return response()->streamDownload(function () use ($livewire) {
+                    ->action(function (HasTable $livewire): StreamedResponse {
+                        return response()->streamDownload(function () use ($livewire): void {
                             $handle = fopen('php://output', 'w');
                             // UTF-8 BOM for Excel support
                             fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
@@ -327,8 +371,10 @@ class LaporanPenjualan extends Page implements HasTable
                                 'Status',
                             ]);
 
-                            $query = $livewire->getFilteredTableQuery()->with(['client', 'items']);
-                            foreach ($query->lazy() as $record) {
+                            $query = $livewire->getFilteredSortedTableQuery()
+                                ->with(['client', 'items']);
+
+                            foreach ($query->lazy(200) as $record) {
                                 fputcsv($handle, [
                                     $record->invoice_number,
                                     $record->client?->name ?? '-',
@@ -369,6 +415,7 @@ class LaporanPenjualan extends Page implements HasTable
                     ->openUrlInNewTab(),
             ])
             ->defaultSort('issue_date', 'desc')
+            ->defaultKeySort()
             ->striped();
     }
 }

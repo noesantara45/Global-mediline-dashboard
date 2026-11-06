@@ -6,9 +6,11 @@ use App\Filament\Resources\ProductResource\Pages;
 use App\Models\Product;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
@@ -32,13 +34,19 @@ class ProductResource extends Resource
             ->schema([
                 Forms\Components\Section::make('Informasi Produk')
                     ->schema([
-                        Forms\Components\Grid::make(2)
+                        Forms\Components\Grid::make(3)
                             ->schema([
                                 Forms\Components\TextInput::make('name')
                                     ->label('Nama Barang / Produk')
                                     ->required()
                                     ->live(onBlur: true)
                                     ->maxLength(255),
+
+                                Forms\Components\Select::make('division')
+                                    ->label('Divisi')
+                                    ->options(Product::divisionOptions())
+                                    ->placeholder('Pilih Divisi Produk...')
+                                    ->native(false),
 
                                 Forms\Components\TextInput::make('brand')
                                     ->label('Merek / Brand')
@@ -106,17 +114,26 @@ class ProductResource extends Resource
                     ->sortable()
                     ->weight('bold'),
 
+                Tables\Columns\TextColumn::make('division')
+                    ->label('Divisi')
+                    ->badge()
+                    ->color(fn (?string $state): string => Product::divisionColor($state))
+                    ->placeholder('Belum diatur')
+                    ->searchable()
+                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('brand')
                     ->label('Merek')
                     ->badge()
                     ->color('gray')
+                    ->placeholder('-')
                     ->searchable()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('description')
                     ->label('Keterangan')
                     ->limit(50)
-                    ->tooltip(fn ($record): ?string => $record->description)
+                    ->tooltip(fn (Product $record): ?string => $record->description)
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('unit')
@@ -143,7 +160,20 @@ class ProductResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('division')
+                    ->label('Divisi')
+                    ->options(Product::divisionOptions()),
+
+                Tables\Filters\SelectFilter::make('brand')
+                    ->label('Merek')
+                    ->options(
+                        fn (): array => Product::whereNotNull('brand')
+                            ->where('brand', '!=', '')
+                            ->distinct()
+                            ->pluck('brand', 'brand')
+                            ->toArray()
+                    )
+                    ->searchable(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -151,6 +181,28 @@ class ProductResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\BulkAction::make('set_division')
+                        ->label('Atur Divisi')
+                        ->icon('heroicon-m-tag')
+                        ->form([
+                            Forms\Components\Select::make('division')
+                                ->label('Pilih Divisi')
+                                ->options(Product::divisionOptions())
+                                ->required()
+                                ->native(false),
+                        ])
+                        ->action(function (Collection $records, array $data): void {
+                            $records->each(fn (Product $product): bool => $product->update([
+                                'division' => $data['division'],
+                            ]));
+
+                            Notification::make()
+                                ->title('Divisi produk berhasil diperbarui')
+                                ->success()
+                                ->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
+
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
