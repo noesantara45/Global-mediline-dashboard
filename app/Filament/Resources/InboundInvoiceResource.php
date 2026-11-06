@@ -9,6 +9,7 @@ use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Support\RawJs;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Arr;
@@ -109,9 +110,14 @@ class InboundInvoiceResource extends Resource
                                     ->columnSpan(1),
                                 Forms\Components\TextInput::make('unit_price')
                                     ->label('Harga Satuan')
-                                    ->numeric()
+                                    ->prefix('Rp')
+                                    ->placeholder('0')
+                                    ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                                    ->stripCharacters('.')
+                                    ->formatStateUsing(fn ($state) => filled($state) ? number_format((float) $state, 0, ',', '.') : '')
+                                    ->dehydrateStateUsing(fn ($state) => InboundInvoiceResource::parseIndonesianAmount((string) $state))
                                     ->required()
-                                    ->live()
+                                    ->live(onBlur: true)
                                     ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::updateItemSubtotal($set, $get))
                                     ->columnSpan(2),
                                 Forms\Components\TextInput::make('subtotal')
@@ -146,10 +152,15 @@ class InboundInvoiceResource extends Resource
                             ->required(),
                         Forms\Components\TextInput::make('subtotal_amount')
                             ->label('Subtotal (Rp)')
+                            ->prefix('Rp')
+                            ->placeholder('0')
+                            ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                            ->stripCharacters('.')
+                            ->formatStateUsing(fn ($state) => filled($state) ? number_format((float) $state, 0, ',', '.') : '')
+                            ->dehydrateStateUsing(fn ($state) => InboundInvoiceResource::parseIndonesianAmount((string) $state))
                             ->required()
-                            ->numeric()
-                            ->live()
-                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, $state) => $set('tax_amount', (float) $state * ((float) $get('tax_percentage') / 100))
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, $state) => $set('tax_amount', InboundInvoiceResource::parseIndonesianAmount((string) $state) * ((float) $get('tax_percentage') / 100))
                             )
                             ->default(0.00),
 
@@ -159,7 +170,7 @@ class InboundInvoiceResource extends Resource
                             ->live()
                             ->dehydrated(false) // Tidak disimpan langsung ke DB
                             ->default(11)
-                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, $state) => $set('tax_amount', (float) $get('subtotal_amount') * ((float) $state / 100))
+                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, $state) => $set('tax_amount', InboundInvoiceResource::parseIndonesianAmount((string) $get('subtotal_amount')) * ((float) $state / 100))
                             ),
 
                         Forms\Components\Hidden::make('tax_amount')
@@ -167,12 +178,23 @@ class InboundInvoiceResource extends Resource
 
                         Forms\Components\TextInput::make('total_amount')
                             ->label('Total Tagihan (Rp)')
+                            ->prefix('Rp')
+                            ->placeholder('0')
+                            ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                            ->stripCharacters('.')
+                            ->formatStateUsing(fn ($state) => filled($state) ? number_format((float) $state, 0, ',', '.') : '')
+                            ->dehydrateStateUsing(fn ($state) => InboundInvoiceResource::parseIndonesianAmount((string) $state))
                             ->required()
-                            ->numeric()
                             ->default(0.00),
                         Forms\Components\TextInput::make('paid_amount')
+                            ->label('Sudah Dibayar (Rp)')
+                            ->prefix('Rp')
+                            ->placeholder('0')
+                            ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
+                            ->stripCharacters('.')
+                            ->formatStateUsing(fn ($state) => filled($state) ? number_format((float) $state, 0, ',', '.') : '')
+                            ->dehydrateStateUsing(fn ($state) => InboundInvoiceResource::parseIndonesianAmount((string) $state))
                             ->required()
-                            ->numeric()
                             ->default(0.00),
                         Forms\Components\Textarea::make('notes')
                             ->columnSpanFull(),
@@ -599,7 +621,7 @@ class InboundInvoiceResource extends Resource
     public static function updateItemSubtotal(Forms\Set $set, Forms\Get $get): void
     {
         $qty = (float) $get('quantity') ?: 0;
-        $price = (float) $get('unit_price') ?: 0;
+        $price = self::parseIndonesianAmount((string) $get('unit_price'));
         $subtotal = $qty * $price;
         $set('subtotal', round($subtotal));
     }

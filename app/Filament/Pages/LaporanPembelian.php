@@ -15,7 +15,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LaporanPembelian extends Page implements HasTable
 {
@@ -295,63 +294,6 @@ class LaporanPembelian extends Page implements HasTable
                 'sm' => 3,
                 'lg' => 4,
                 'xl' => 7,
-            ])
-            ->headerActions([
-                Tables\Actions\Action::make('export_csv')
-                    ->label('Export Rekap Beli')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('success')
-                    ->action(function (self $livewire): StreamedResponse {
-                        return response()->streamDownload(function () use ($livewire): void {
-                            $handle = fopen('php://output', 'w');
-                            if ($handle === false) {
-                                return;
-                            }
-
-                            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
-
-                            fputcsv($handle, [
-                                'No Faktur',
-                                'Supplier',
-                                'Tanggal',
-                                'Gross Beli',
-                                'Diskon',
-                                'PPN',
-                                'Sub Total',
-                                'Total Pembelian',
-                                'Sudah Dibayar',
-                                'Jatuh Tempo',
-                                'Status',
-                                'Rincian Barang',
-                            ]);
-
-                            $query = $livewire->getFilteredTableQuery()->with(['supplier', 'items']);
-                            foreach ($query->lazy() as $record) {
-                                $itemsSummary = $record->items
-                                    ->map(fn (InboundInvoiceItem $item): string => "{$item->item_name} ({$item->quantity} {$item->unit})")
-                                    ->implode('; ');
-
-                                fputcsv($handle, [
-                                    $record->invoice_number,
-                                    $record->supplier?->name ?? '-',
-                                    $record->issue_date,
-                                    $record->gross_purchase,
-                                    $record->total_discount,
-                                    $record->tax_amount,
-                                    $record->subtotal_amount,
-                                    $record->total_amount,
-                                    $record->paid_amount,
-                                    $record->due_date,
-                                    $record->status,
-                                    $itemsSummary ?: '-',
-                                ]);
-                            }
-
-                            fclose($handle);
-                        }, 'Rekap-Pembelian-'.now()->format('Ymd_His').'.csv', [
-                            'Content-Type' => 'text/csv; charset=UTF-8',
-                        ]);
-                    }),
             ])
             ->actions([
                 Tables\Actions\Action::make('cetak_pdf')

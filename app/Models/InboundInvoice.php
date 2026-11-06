@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Filament\Resources\InboundInvoiceResource;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -45,5 +46,10 @@ class InboundInvoice extends Model
         }
 
         return 0.0;
+    }
+
+    public function setPaidAmountAttribute($value): void
+    {
+        $this->attributes['paid_amount'] = InboundInvoiceResource::parseIndonesianAmount((string) $value);
     }
 }

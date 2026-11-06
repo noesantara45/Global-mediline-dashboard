@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Filament\Resources\InboundInvoiceResource;
 use Illuminate\Database\Eloquent\Model;
 
 class OutboundInvoice extends Model
@@ -48,5 +49,10 @@ class OutboundInvoice extends Model
     public function getDivisiAttribute(): ?string
     {
         return $this->division;
+    }
+
+    public function setPaidAmountAttribute($value): void
+    {
+        $this->attributes['paid_amount'] = InboundInvoiceResource::parseIndonesianAmount((string) $value);
     }
 }

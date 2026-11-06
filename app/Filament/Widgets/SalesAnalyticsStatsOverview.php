@@ -56,6 +56,8 @@ class SalesAnalyticsStatsOverview extends BaseWidget
 
         if ($status) {
             $query->where('status', $status);
+        } else {
+            $query->where('status', '!=', 'Cancelled');
         }
 
         return $query;

@@ -69,6 +69,45 @@ class CreateInboundInvoiceTest extends TestCase
         $component->assertRedirect();
     }
 
+    public function test_entering_formatted_indonesian_paid_amount_with_dots_saves_full_value_correctly(): void
+    {
+        $user = User::factory()->create();
+        $supplier = Supplier::create([
+            'name' => 'PT Mensa Bina Sukses',
+            'top_days' => 14,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(CreateInboundInvoice::class)
+            ->fillForm([
+                'supplier_id' => $supplier->id,
+                'invoice_number' => 'INV-TEST-PAID-01',
+                'issue_date' => '2026-11-06',
+                'due_date' => '2026-11-20',
+                'status' => 'Partial',
+                'subtotal_amount' => '5.866.501',
+                'total_amount' => '7.081.816',
+                'paid_amount' => '3.540.908',
+                'items' => [
+                    [
+                        'item_name' => 'Reagen Alkes',
+                        'quantity' => 1,
+                        'unit' => 'Pcs',
+                        'unit_price' => '5.866.501',
+                        'subtotal' => 5866501,
+                    ],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $invoice = InboundInvoice::where('invoice_number', 'INV-TEST-PAID-01')->first();
+        $this->assertNotNull($invoice);
+        $this->assertEquals(3540908.0, (float) $invoice->paid_amount);
+        $this->assertEquals(6511816.0, (float) $invoice->total_amount);
+        $this->assertEquals(5866501.0, (float) $invoice->subtotal_amount);
+    }
+
     public function test_selecting_supplier_after_uploading_invoice_triggers_ocr_automatically(): void
     {
         Storage::fake('local');

@@ -76,6 +76,11 @@ class LaporanRekapBarang extends Page implements HasTable
 
     public function table(Table $table): Table
     {
+        $activeItemConstraint = fn (Builder $q): Builder => $q->whereHas(
+            'invoice',
+            fn (Builder $iq): Builder => $iq->where('status', '!=', 'Cancelled')
+        );
+
         return $table
             ->query(
                 Product::query()
@@ -83,9 +88,9 @@ class LaporanRekapBarang extends Page implements HasTable
                         $this->activeDivision !== 'all',
                         fn (Builder $query): Builder => $query->where('division', $this->activeDivision)
                     )
-                    ->withSum('outboundItems as total_qty_sold', 'quantity')
-                    ->withSum('outboundItems as total_omzet', 'subtotal')
-                    ->withCount('outboundItems as total_transactions')
+                    ->withSum(['outboundItems as total_qty_sold' => $activeItemConstraint], 'quantity')
+                    ->withSum(['outboundItems as total_omzet' => $activeItemConstraint], 'subtotal')
+                    ->withCount(['outboundItems as total_transactions' => $activeItemConstraint])
             )
             ->columns([
                 Tables\Columns\ImageColumn::make('photo_url')
@@ -208,8 +213,8 @@ class LaporanRekapBarang extends Page implements HasTable
                     ->trueLabel('Pernah Terjual (Omzet > 0)')
                     ->falseLabel('Belum Pernah Terjual')
                     ->queries(
-                        true: fn (Builder $query): Builder => $query->whereHas('outboundItems'),
-                        false: fn (Builder $query): Builder => $query->whereDoesntHave('outboundItems'),
+                        true: fn (Builder $query): Builder => $query->whereHas('outboundItems', $activeItemConstraint),
+                        false: fn (Builder $query): Builder => $query->whereDoesntHave('outboundItems', $activeItemConstraint),
                     ),
 
                 Tables\Filters\SelectFilter::make('unit')

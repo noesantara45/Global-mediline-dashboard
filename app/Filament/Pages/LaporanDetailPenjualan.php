@@ -13,6 +13,7 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class LaporanDetailPenjualan extends Page implements HasTable
@@ -69,13 +70,17 @@ class LaporanDetailPenjualan extends Page implements HasTable
                 Tables\Columns\TextColumn::make('division')
                     ->label('Divisi')
                     ->badge()
-                    ->color(fn (?string $state): string => Product::divisionColor($state)),
+                    ->color(fn (?string $state): string => Product::divisionColor($state))
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(function (Builder $sub) use ($search): void {
+                        $sub->where('outbound_invoices.division', 'like', "%{$search}%")
+                            ->orWhereHas('product', fn (Builder $q): Builder => $q->where('division', 'like', "%{$search}%"));
+                    })),
 
                 Tables\Columns\TextColumn::make('brand')
                     ->label('Merek')
                     ->badge()
                     ->color('gray')
-                    ->searchable(),
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas('product', fn (Builder $q): Builder => $q->where('brand', 'like', "%{$search}%"))),
 
                 Tables\Columns\TextColumn::make('quantity')
                     ->label('Qty')
@@ -253,7 +258,7 @@ class LaporanDetailPenjualan extends Page implements HasTable
                     ->tooltip('Buka & Edit Faktur Penjualan')
                     ->url(fn (OutboundInvoiceItem $record): string => OutboundInvoiceResource::getUrl('edit', ['record' => $record->outbound_invoice_id])),
             ])
-            ->defaultSort('id', 'desc')
+            ->defaultSort('outbound_invoice_items.id', 'desc')
             ->striped();
     }
 }

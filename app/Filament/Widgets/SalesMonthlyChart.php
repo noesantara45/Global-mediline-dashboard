@@ -57,6 +57,8 @@ class SalesMonthlyChart extends ChartWidget
 
         if ($status) {
             $query->where('status', $status);
+        } else {
+            $query->where('status', '!=', 'Cancelled');
         }
 
         return $query;

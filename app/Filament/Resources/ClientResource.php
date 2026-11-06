@@ -27,7 +27,15 @@ class ClientResource extends Resource
                 Forms\Components\TextInput::make('name')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\TextInput::make('type')
+                Forms\Components\Select::make('type')
+                    ->label('Tipe Customer')
+                    ->options([
+                        'Rumah Sakit' => 'Rumah Sakit',
+                        'Klinik' => 'Klinik',
+                        'Apotek' => 'Apotek',
+                        'Lainnya' => 'Lainnya',
+                    ])
+                    ->default('Rumah Sakit')
                     ->required(),
                 Forms\Components\TextInput::make('contact_person')
                     ->maxLength(255),
@@ -52,7 +60,15 @@ class ClientResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('type'),
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Tipe')
+                    ->badge()
+                    ->color(fn (?string $state): string => match ($state) {
+                        'Rumah Sakit' => 'danger',
+                        'Klinik' => 'warning',
+                        'Apotek' => 'info',
+                        default => 'gray',
+                    }),
                 Tables\Columns\TextColumn::make('contact_person')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('phone')

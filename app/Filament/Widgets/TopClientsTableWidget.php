@@ -38,7 +38,11 @@ class TopClientsTableWidget extends BaseWidget
                             ->orWhereHas('items.product', fn (Builder $pq): Builder => $pq->where('division', $div));
                     });
                 })
-                ->when($status, fn (Builder $sq, string $s): Builder => $sq->where('status', $s));
+                ->when(
+                    $status,
+                    fn (Builder $sq, string $s): Builder => $sq->where('status', $s),
+                    fn (Builder $sq): Builder => $sq->where('status', '!=', 'Cancelled')
+                );
         };
 
         return $table

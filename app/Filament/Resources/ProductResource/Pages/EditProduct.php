@@ -20,10 +20,36 @@ class EditProduct extends EditRecord
         ];
     }
 
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        if (! empty($data['photo'])) {
+            $filename = basename($data['photo']);
+            $disk = Storage::disk('public');
+
+            if (! $disk->exists('products/'.$filename)) {
+                $publicFile = public_path('images/products/'.$filename);
+                if (file_exists($publicFile)) {
+                    $disk->put('products/'.$filename, file_get_contents($publicFile));
+                }
+            }
+
+            if (! $disk->exists($filename)) {
+                $publicFile = public_path('images/products/'.$filename);
+                if (file_exists($publicFile)) {
+                    $disk->put($filename, file_get_contents($publicFile));
+                }
+            }
+        }
+
+        return $data;
+    }
+
     protected function mutateFormDataBeforeSave(array $data): array
     {
         if (! empty($data['photo']) && ! empty($data['name'])) {
             $data['photo'] = $this->syncAndCleanPhoto($data['photo'], $data['name']);
+        } elseif (empty($data['photo']) && ! empty($this->record->photo)) {
+            $data['photo'] = $this->record->photo;
         }
 
         return $data;

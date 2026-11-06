@@ -131,29 +131,14 @@ class LaporanPembelianTest extends TestCase
             ->assertCanNotSeeTableRecords([$invoiceA]);
     }
 
-    public function test_exports_rekap_pembelian_csv(): void
+    public function test_export_csv_action_is_not_present(): void
     {
         $user = User::factory()->create();
-        $supplier = Supplier::create([
-            'name' => 'PT. BIO CARE SEJAHTERA',
-            'is_active' => true,
-        ]);
-        InboundInvoice::create([
-            'supplier_id' => $supplier->id,
-            'invoice_number' => 'INV-CSV-001',
-            'issue_date' => '2025-11-19',
-            'due_date' => '2025-12-19',
-            'status' => 'Paid',
-            'subtotal_amount' => 1000000,
-            'tax_amount' => 110000,
-            'total_amount' => 1110000,
-            'paid_amount' => 1110000,
-        ]);
 
         Livewire::actingAs($user)
             ->test(LaporanPembelian::class)
-            ->callTableAction('export_csv')
-            ->assertFileDownloaded();
+            ->assertTableActionDoesNotExist('export_csv')
+            ->assertDontSee('Export Rekap Beli');
     }
 
     public function test_prints_inbound_invoice_pdf_only_for_authenticated_users(): void

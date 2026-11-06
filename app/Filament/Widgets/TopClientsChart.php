@@ -74,6 +74,8 @@ class TopClientsChart extends ChartWidget
 
         if ($status) {
             $query->where('outbound_invoices.status', $status);
+        } else {
+            $query->where('outbound_invoices.status', '!=', 'Cancelled');
         }
 
         return $query;

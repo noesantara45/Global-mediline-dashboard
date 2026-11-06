@@ -8,6 +8,7 @@ use App\Filament\Pages\LaporanPenjualan;
 use App\Filament\Pages\LaporanRekapBarang;
 use App\Filament\Resources\OutboundInvoiceResource\Pages\CreateOutboundInvoice;
 use App\Filament\Resources\ProductResource\Pages\CreateProduct;
+use App\Filament\Resources\ProductResource\Pages\EditProduct;
 use App\Filament\Resources\ProductResource\Pages\ListProducts;
 use App\Filament\Widgets\TopClientsTableWidget;
 use App\Models\Client;
@@ -62,6 +63,34 @@ class ProductDivisionFlowTest extends TestCase
             ->set('activeTab', Product::DIVISION_BLOOD_TRANSFUSION)
             ->assertCanSeeTableRecords([$bloodProduct])
             ->assertCanNotSeeTableRecords([$unassignedProduct]);
+    }
+
+    public function test_editing_product_division_preserves_existing_photo(): void
+    {
+        $user = User::factory()->create();
+
+        $product = Product::create([
+            'name' => 'Hematology',
+            'brand' => 'DIRUI',
+            'division' => null,
+            'photo' => 'hematology.png',
+            'unit' => 'Unit',
+            'price' => 150000000,
+        ]);
+
+        $this->assertSame('hematology.png', $product->photo);
+
+        Livewire::actingAs($user)
+            ->test(EditProduct::class, ['record' => $product->id])
+            ->fillForm([
+                'division' => Product::DIVISION_DIAGNOSTIC,
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $product->refresh();
+        $this->assertSame(Product::DIVISION_DIAGNOSTIC, $product->division);
+        $this->assertSame('hematology.png', $product->photo);
     }
 
     public function test_outbound_invoice_supports_cross_division_items_auto_fills_division_and_filters_reports(): void
