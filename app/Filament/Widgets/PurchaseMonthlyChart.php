@@ -55,8 +55,17 @@ class PurchaseMonthlyChart extends ChartWidget
         $startDateStr = $this->filters['start_date'] ?? null;
         $endDateStr = $this->filters['end_date'] ?? null;
 
-        $minDate = (clone $baseQuery)->min('issue_date');
-        $maxDate = (clone $baseQuery)->max('issue_date');
+        $minDate = null;
+        $maxDate = null;
+
+        if (! $startDateStr || ! $endDateStr) {
+            $dateRange = (clone $baseQuery)
+                ->selectRaw('MIN(issue_date) as min_date, MAX(issue_date) as max_date')
+                ->toBase()
+                ->first();
+            $minDate = $dateRange?->min_date;
+            $maxDate = $dateRange?->max_date;
+        }
 
         if (! $startDateStr && ! $endDateStr) {
             if ($minDate && $maxDate) {
@@ -64,7 +73,7 @@ class PurchaseMonthlyChart extends ChartWidget
                 $end = Carbon::parse($maxDate)->endOfMonth();
 
                 if ($start->diffInMonths($end) < 5) {
-                    $start = (clone $end)->subMonths(5)->startOfMonth();
+                    $start = (clone $end)->startOfMonth()->subMonthsNoOverflow(5);
                 }
             } else {
                 $start = now()->startOfYear();

@@ -9,7 +9,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InboundInvoice extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'supplier_id',
+        'pdf_file',
+        'invoice_number',
+        'issue_date',
+        'due_date',
+        'status',
+        'subtotal_amount',
+        'tax_amount',
+        'total_amount',
+        'paid_amount',
+        'notes',
+    ];
 
     public function supplier(): BelongsTo
     {

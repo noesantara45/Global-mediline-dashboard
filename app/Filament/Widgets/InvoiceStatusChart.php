@@ -43,27 +43,31 @@ class InvoiceStatusChart extends ChartWidget
         $today = now()->toDateString();
 
         if ($isCount) {
-            $paid = OutboundInvoice::where('status', 'Paid')->count();
+            $stats = OutboundInvoice::query()
+                ->selectRaw(
+                    "COALESCE(SUM(CASE WHEN status = 'Paid' THEN 1 ELSE 0 END), 0) as paid_count,
+                     COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') AND due_date >= ? THEN 1 ELSE 0 END), 0) as in_tempo_count,
+                     COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') AND due_date < ? THEN 1 ELSE 0 END), 0) as overdue_count",
+                    [$today, $today]
+                )
+                ->first();
 
-            $inTempo = OutboundInvoice::whereIn('status', ['Unpaid', 'Partial'])
-                ->whereDate('due_date', '>=', $today)
-                ->count();
-
-            $overdue = OutboundInvoice::whereIn('status', ['Unpaid', 'Partial'])
-                ->whereDate('due_date', '<', $today)
-                ->count();
+            $paid = (int) ($stats?->paid_count ?? 0);
+            $inTempo = (int) ($stats?->in_tempo_count ?? 0);
+            $overdue = (int) ($stats?->overdue_count ?? 0);
         } else {
-            $paid = (float) OutboundInvoice::where('status', 'Paid')->sum('total_amount');
+            $stats = OutboundInvoice::query()
+                ->selectRaw(
+                    "COALESCE(SUM(CASE WHEN status = 'Paid' THEN total_amount ELSE 0 END), 0) as paid_sum,
+                     COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') AND due_date >= ? AND total_amount > paid_amount THEN total_amount - paid_amount ELSE 0 END), 0) as in_tempo_sum,
+                     COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') AND due_date < ? AND total_amount > paid_amount THEN total_amount - paid_amount ELSE 0 END), 0) as overdue_sum",
+                    [$today, $today]
+                )
+                ->first();
 
-            $inTempoInvoices = OutboundInvoice::whereIn('status', ['Unpaid', 'Partial'])
-                ->whereDate('due_date', '>=', $today)
-                ->get();
-            $inTempo = (float) $inTempoInvoices->sum(fn (OutboundInvoice $inv): float => max(0, (float) $inv->total_amount - (float) $inv->paid_amount));
-
-            $overdueInvoices = OutboundInvoice::whereIn('status', ['Unpaid', 'Partial'])
-                ->whereDate('due_date', '<', $today)
-                ->get();
-            $overdue = (float) $overdueInvoices->sum(fn (OutboundInvoice $inv): float => max(0, (float) $inv->total_amount - (float) $inv->paid_amount));
+            $paid = (float) ($stats?->paid_sum ?? 0);
+            $inTempo = (float) ($stats?->in_tempo_sum ?? 0);
+            $overdue = (float) ($stats?->overdue_sum ?? 0);
         }
 
         return [

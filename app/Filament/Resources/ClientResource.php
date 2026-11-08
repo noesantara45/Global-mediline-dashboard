@@ -6,9 +6,11 @@ use App\Filament\Resources\ClientResource\Pages;
 use App\Models\Client;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class ClientResource extends Resource
 {
@@ -50,6 +52,7 @@ class ClientResource extends Resource
                 Forms\Components\TextInput::make('tax_id')
                     ->maxLength(255),
                 Forms\Components\Toggle::make('is_active')
+                    ->default(true)
                     ->required(),
             ]);
     }
@@ -96,7 +99,20 @@ class ClientResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function (Tables\Actions\DeleteBulkAction $action, Collection $records): void {
+                            $hasInvoices = $records->contains(fn (Client $record): bool => $record->outboundInvoices()->exists());
+
+                            if ($hasInvoices) {
+                                Notification::make()
+                                    ->title('Tidak dapat menghapus customer')
+                                    ->body('Satu atau lebih customer yang dipilih masih memiliki histori faktur penjualan. Nonaktifkan status aktif sebagai gantinya.')
+                                    ->danger()
+                                    ->send();
+
+                                $action->cancel();
+                            }
+                        }),
                 ]),
             ]);
     }

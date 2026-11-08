@@ -234,6 +234,8 @@ class DashboardTest extends TestCase
 
         $statusChart = new class extends InvoiceStatusChart
         {
+            public ?string $filter = 'nominal';
+
             /**
              * @return array<string, mixed>
              */
@@ -241,10 +243,25 @@ class DashboardTest extends TestCase
             {
                 return $this->getOptions();
             }
+
+            /**
+             * @return array<string, mixed>
+             */
+            public function exposedData(): array
+            {
+                return $this->getData();
+            }
         };
 
         $options = $statusChart->exposedOptions();
         $this->assertFalse($options['scales']['x']['display']);
         $this->assertFalse($options['scales']['y']['display']);
+
+        $nominalData = $statusChart->exposedData();
+        $this->assertSame([1110000.0, 0.0, 2000000.0], $nominalData['datasets'][0]['data']);
+
+        $statusChart->filter = 'count';
+        $countData = $statusChart->exposedData();
+        $this->assertSame([1, 0, 1], $countData['datasets'][0]['data']);
     }
 }

@@ -88,14 +88,14 @@ class LaporanDetailPenjualanTest extends TestCase
             'paid_amount' => 2220,
         ]);
 
-        OutboundInvoiceItem::create([
+        $itemA = OutboundInvoiceItem::create([
             'outbound_invoice_id' => $invA->id,
             'item_name' => 'Item A',
             'quantity' => 1,
             'unit_price' => 1000,
             'subtotal' => 1000,
         ]);
-        OutboundInvoiceItem::create([
+        $itemB = OutboundInvoiceItem::create([
             'outbound_invoice_id' => $invB->id,
             'item_name' => 'Item B',
             'quantity' => 1,
@@ -105,7 +105,66 @@ class LaporanDetailPenjualanTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(LaporanDetailPenjualan::class)
+            ->assertCanSeeTableRecords([$itemB, $itemA], inOrder: true)
+            ->sortTable('subtotal', 'asc')
+            ->assertCanSeeTableRecords([$itemA, $itemB], inOrder: true)
             ->sortTable('invoice.client.name', 'desc')
+            ->assertCanSeeTableRecords([$itemB, $itemA], inOrder: true)
+            ->sortTable('invoice.client.name', 'asc')
+            ->assertCanSeeTableRecords([$itemA, $itemB], inOrder: true)
             ->assertSuccessful();
+    }
+
+    public function test_excludes_cancelled_invoices_from_grand_totals_and_filters_by_status(): void
+    {
+        $user = User::factory()->create();
+        $client = Client::create(['name' => 'RSUD Tabanan', 'type' => 'Rumah Sakit']);
+
+        $paidInvoice = OutboundInvoice::create([
+            'client_id' => $client->id,
+            'invoice_number' => 'INV/DET/PAID',
+            'issue_date' => '2026-11-01',
+            'due_date' => '2026-12-01',
+            'status' => 'Paid',
+            'subtotal_amount' => 2000000,
+            'tax_amount' => 220000,
+            'total_amount' => 2220000,
+            'paid_amount' => 2220000,
+        ]);
+        $paidItem = OutboundInvoiceItem::create([
+            'outbound_invoice_id' => $paidInvoice->id,
+            'item_name' => 'Reagen Aktif',
+            'quantity' => 2,
+            'unit_price' => 1000000,
+            'subtotal' => 2000000,
+        ]);
+
+        $cancelledInvoice = OutboundInvoice::create([
+            'client_id' => $client->id,
+            'invoice_number' => 'INV/DET/CANCEL',
+            'issue_date' => '2026-11-02',
+            'due_date' => '2026-12-02',
+            'status' => 'Cancelled',
+            'subtotal_amount' => 5000000,
+            'tax_amount' => 550000,
+            'total_amount' => 5550000,
+            'paid_amount' => 0,
+        ]);
+        $cancelledItem = OutboundInvoiceItem::create([
+            'outbound_invoice_id' => $cancelledInvoice->id,
+            'item_name' => 'Reagen Batal',
+            'quantity' => 5,
+            'unit_price' => 1000000,
+            'subtotal' => 5000000,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(LaporanDetailPenjualan::class)
+            ->assertCanSeeTableRecords([$paidItem, $cancelledItem])
+            ->assertTableColumnSummarySet('quantity', 'total_qty', 2)
+            ->assertTableColumnSummarySet('subtotal', 'grand_total', 2000000)
+            ->filterTable('status', 'Paid')
+            ->assertCanSeeTableRecords([$paidItem])
+            ->assertCanNotSeeTableRecords([$cancelledItem]);
     }
 }

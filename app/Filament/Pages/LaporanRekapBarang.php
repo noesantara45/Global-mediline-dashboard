@@ -178,7 +178,7 @@ class LaporanRekapBarang extends Page implements HasTable
                     ->icon('heroicon-o-queue-list')
                     ->color('gray')
                     ->tooltip('Lihat Riwayat Transaksi Barang Ini')
-                    ->url(fn (Product $record): string => url('/admin/laporan-detail-penjualan?tableSearch='.urlencode($record->name)))
+                    ->url(fn (Product $record): string => LaporanDetailPenjualan::getUrl(['tableSearch' => $record->name]))
                     ->openUrlInNewTab(),
 
                 Tables\Actions\Action::make('edit')

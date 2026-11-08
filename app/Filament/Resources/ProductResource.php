@@ -39,6 +39,7 @@ class ProductResource extends Resource
                                 Forms\Components\TextInput::make('name')
                                     ->label('Nama Barang / Produk')
                                     ->required()
+                                    ->unique(ignoreRecord: true)
                                     ->live(onBlur: true)
                                     ->maxLength(255),
 
@@ -66,6 +67,7 @@ class ProductResource extends Resource
                                     ->label('Harga Satuan')
                                     ->required()
                                     ->numeric()
+                                    ->minValue(0)
                                     ->prefix('Rp')
                                     ->default(0),
                             ]),
@@ -79,6 +81,8 @@ class ProductResource extends Resource
                         Forms\Components\FileUpload::make('photo')
                             ->label('Foto Produk')
                             ->image()
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                            ->maxSize(2048)
                             ->disk('public')
                             ->directory('products')
                             ->getUploadedFileNameForStorageUsing(
@@ -177,7 +181,18 @@ class ProductResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->before(function (Tables\Actions\DeleteAction $action, Product $record): void {
+                        if ($record->outboundItems()->exists() || $record->inboundItems()->exists()) {
+                            Notification::make()
+                                ->title('Tidak dapat menghapus produk')
+                                ->body('Produk ini sudah tercatat pada histori faktur sehingga tidak dapat dihapus.')
+                                ->danger()
+                                ->send();
+
+                            $action->cancel();
+                        }
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -203,7 +218,22 @@ class ProductResource extends Resource
                         })
                         ->deselectRecordsAfterCompletion(),
 
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function (Tables\Actions\DeleteBulkAction $action, Collection $records): void {
+                            $hasHistory = $records->contains(
+                                fn (Product $product): bool => $product->outboundItems()->exists() || $product->inboundItems()->exists()
+                            );
+
+                            if ($hasHistory) {
+                                Notification::make()
+                                    ->title('Tidak dapat menghapus produk')
+                                    ->body('Satu atau lebih produk yang dipilih sudah tercatat pada histori faktur.')
+                                    ->danger()
+                                    ->send();
+
+                                $action->cancel();
+                            }
+                        }),
                 ]),
             ]);
     }

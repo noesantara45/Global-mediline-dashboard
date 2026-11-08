@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\InboundInvoiceResource\Pages;
 
 use App\Filament\Resources\InboundInvoiceResource;
+use App\Filament\Resources\OutboundInvoiceResource\Pages\EditOutboundInvoice;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 
@@ -29,5 +30,19 @@ class EditInboundInvoice extends EditRecord
         }
 
         return $data;
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        $editUrl = $this->getResource()::getUrl('edit', ['record' => $this->record]);
+
+        if (
+            EditOutboundInvoice::isSafeRedirectUrl($this->previousUrl) &&
+            ! str_contains((string) $this->previousUrl, $editUrl)
+        ) {
+            return (string) $this->previousUrl;
+        }
+
+        return $this->getResource()::getUrl('index');
     }
 }

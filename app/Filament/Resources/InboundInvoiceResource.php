@@ -53,6 +53,10 @@ class InboundInvoiceResource extends Resource
 
                         Forms\Components\FileUpload::make('pdf_file')
                             ->label('Upload Faktur (PDF atau Gambar)')
+                            ->disk('local')
+                            ->directory('inbound-invoices')
+                            ->visibility('private')
+                            ->maxSize(10240)
                             ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])
                             ->live()
                             ->hintAction(
@@ -99,6 +103,7 @@ class InboundInvoiceResource extends Resource
                                 Forms\Components\TextInput::make('quantity')
                                     ->label('Qty')
                                     ->numeric()
+                                    ->minValue(1)
                                     ->default(1)
                                     ->required()
                                     ->live()
@@ -136,10 +141,12 @@ class InboundInvoiceResource extends Resource
                     ->schema([
                         Forms\Components\TextInput::make('invoice_number')
                             ->required()
+                            ->unique(ignoreRecord: true)
                             ->maxLength(255),
                         Forms\Components\DatePicker::make('issue_date')
                             ->required(),
                         Forms\Components\DatePicker::make('due_date')
+                            ->afterOrEqual('issue_date')
                             ->required(),
                         Forms\Components\Select::make('status')
                             ->options([
@@ -149,6 +156,19 @@ class InboundInvoiceResource extends Resource
                                 'Cancelled' => 'Cancelled',
                             ])
                             ->default('Unpaid')
+                            ->live()
+                            ->afterStateUpdated(function (?string $state, Forms\Set $set, Forms\Get $get): void {
+                                if ($state === 'Paid') {
+                                    $total = self::parseIndonesianAmount((string) $get('total_amount'));
+                                    $paid = self::parseIndonesianAmount((string) $get('paid_amount'));
+
+                                    if ($total > 0 && $paid <= 0) {
+                                        $set('paid_amount', number_format($total, 0, ',', '.'));
+                                    }
+                                } elseif ($state === 'Unpaid') {
+                                    $set('paid_amount', '0');
+                                }
+                            })
                             ->required(),
                         Forms\Components\TextInput::make('subtotal_amount')
                             ->label('Subtotal (Rp)')
@@ -160,21 +180,32 @@ class InboundInvoiceResource extends Resource
                             ->dehydrateStateUsing(fn ($state) => InboundInvoiceResource::parseIndonesianAmount((string) $state))
                             ->required()
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, $state) => $set('tax_amount', InboundInvoiceResource::parseIndonesianAmount((string) $state) * ((float) $get('tax_percentage') / 100))
-                            )
+                            ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state): void {
+                                $subtotal = InboundInvoiceResource::parseIndonesianAmount((string) $state);
+                                $tax = round($subtotal * ((float) ($get('tax_percentage') ?? 11) / 100));
+                                $set('tax_amount', $tax);
+                                $set('total_amount', round($subtotal + $tax));
+                            })
                             ->default(0.00),
 
                         Forms\Components\TextInput::make('tax_percentage')
                             ->label('PPN (%)')
                             ->numeric()
+                            ->minValue(0)
+                            ->maxValue(100)
                             ->live()
                             ->dehydrated(false) // Tidak disimpan langsung ke DB
                             ->default(11)
-                            ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get, $state) => $set('tax_amount', InboundInvoiceResource::parseIndonesianAmount((string) $get('subtotal_amount')) * ((float) $state / 100))
-                            ),
+                            ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state): void {
+                                $subtotal = InboundInvoiceResource::parseIndonesianAmount((string) $get('subtotal_amount'));
+                                $tax = round($subtotal * ((float) $state / 100));
+                                $set('tax_amount', $tax);
+                                $set('total_amount', round($subtotal + $tax));
+                            }),
 
                         Forms\Components\Hidden::make('tax_amount')
-                            ->default(0),
+                            ->default(0)
+                            ->dehydrateStateUsing(fn ($state): float => (float) ($state ?? 0)),
 
                         Forms\Components\TextInput::make('total_amount')
                             ->label('Total Tagihan (Rp)')
@@ -264,8 +295,8 @@ class InboundInvoiceResource extends Resource
                         'item_name' => $itemData['item_name'],
                         'quantity' => $itemData['quantity'],
                         'unit' => $itemData['unit'],
-                        'unit_price' => $itemData['unit_price'],
-                        'subtotal' => $itemData['subtotal'],
+                        'unit_price' => round((float) $itemData['unit_price']),
+                        'subtotal' => round((float) $itemData['subtotal']),
                     ];
                 }
 
@@ -359,7 +390,7 @@ class InboundInvoiceResource extends Resource
                 return $fileState;
             }
 
-            foreach (['public', 'local'] as $disk) {
+            foreach (['local', 'public'] as $disk) {
                 if (Storage::disk($disk)->exists($fileState)) {
                     return Storage::disk($disk)->path($fileState);
                 }
@@ -624,6 +655,22 @@ class InboundInvoiceResource extends Resource
         $price = self::parseIndonesianAmount((string) $get('unit_price'));
         $subtotal = $qty * $price;
         $set('subtotal', round($subtotal));
+
+        $items = $get('../../items') ?? [];
+        if (! empty($items)) {
+            $subtotalAmount = 0;
+            foreach ($items as $item) {
+                $subtotalAmount += (float) ($item['subtotal'] ?? 0);
+            }
+
+            $taxPercentage = (float) ($get('../../tax_percentage') ?? 11);
+            $taxAmount = $subtotalAmount * ($taxPercentage / 100);
+            $totalAmount = $subtotalAmount + $taxAmount;
+
+            $set('../../subtotal_amount', round($subtotalAmount));
+            $set('../../tax_amount', round($taxAmount));
+            $set('../../total_amount', round($totalAmount));
+        }
     }
 
     public static function updateTotals(Forms\Set $set, Forms\Get $get): void

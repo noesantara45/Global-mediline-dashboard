@@ -163,23 +163,8 @@
 <body>
 
     <?php
-        // Kop Surat Image
-        $kopPath = public_path('images/kop-surat.png');
-        $kopBase64 = null;
-        if (is_file($kopPath)) {
-            $kopData = file_get_contents($kopPath);
-            $kopType = mime_content_type($kopPath) ?: 'image/png';
-            $kopBase64 = 'data:' . $kopType . ';base64,' . base64_encode($kopData);
-        }
-        
-        // Watermark (opsional, masih pakai logo-gm-clear.png jika mau)
-        $wmPath = public_path('images/logo-gm-clear.png');
-        $wmBase64 = null;
-        if (is_file($wmPath)) {
-            $wmData = file_get_contents($wmPath);
-            $wmType = mime_content_type($wmPath) ?: 'image/png';
-            $wmBase64 = 'data:' . $wmType . ';base64,' . base64_encode($wmData);
-        }
+        $kopBase64 ??= \App\Http\Controllers\PdfController::cachedPublicImageBase64('images/kop-surat.png');
+        $wmBase64 ??= \App\Http\Controllers\PdfController::cachedPublicImageBase64('images/logo-gm-clear.png');
     ?>
 
     <!-- Watermark Logo -->

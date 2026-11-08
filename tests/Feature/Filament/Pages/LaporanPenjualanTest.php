@@ -361,4 +361,53 @@ class LaporanPenjualanTest extends TestCase
         $this->assertLessThan($highPosition, $lowPosition);
         $this->assertStringNotContainsString('INV-CSV-EXCLUDED', $csvContent);
     }
+
+    public function test_csv_export_neutralizes_formula_injection_and_modal_handles_zero_tax_and_quotes_safely(): void
+    {
+        $user = User::factory()->create();
+        $client = Client::create([
+            'name' => '=HYPERLINK("https://evil.example","Klik")',
+            'type' => 'Rumah Sakit',
+        ]);
+
+        $invoice = OutboundInvoice::create([
+            'client_id' => $client->id,
+            'invoice_number' => "INV'QUOTE-01",
+            'sales' => '+SUM(1,2)',
+            'division' => null,
+            'issue_date' => '2026-11-05',
+            'due_date' => '2026-12-05',
+            'status' => 'Unpaid',
+            'subtotal_amount' => 1000000,
+            'tax_amount' => 0,
+            'total_amount' => 1000000,
+            'paid_amount' => 0,
+        ]);
+        OutboundInvoiceItem::create([
+            'outbound_invoice_id' => $invoice->id,
+            'item_name' => 'Alat Bebas PPN',
+            'quantity' => 1,
+            'unit' => 'Unit',
+            'unit_price' => 1000000,
+            'discount_percentage' => 0,
+            'subtotal' => 1000000,
+        ]);
+
+        $component = Livewire::actingAs($user)
+            ->test(LaporanPenjualan::class)
+            ->callTableAction('export_csv');
+
+        $csvContent = base64_decode((string) data_get($component->effects, 'download.content'));
+        $this->assertStringContainsString("'=HYPERLINK(", $csvContent);
+        $this->assertStringContainsString("'+SUM(1,2)", $csvContent);
+        $this->assertStringContainsString(',-,', $csvContent);
+
+        $modalHtml = view('filament.tables.columns.invoice-items-modal', [
+            'record' => $invoice->load('items'),
+        ])->render();
+
+        $this->assertStringNotContainsString('Rp 110.000', $modalHtml);
+        $this->assertStringContainsString('PPN (0%):', $modalHtml);
+        $this->assertStringNotContainsString("writeText('INV'QUOTE-01')", $modalHtml);
+    }
 }

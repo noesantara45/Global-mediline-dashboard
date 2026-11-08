@@ -217,4 +217,66 @@ class GrafikPembelianTest extends TestCase
             ->assertCanSeeTableRecords([$supplierA])
             ->assertCanNotSeeTableRecords([$supplierB]);
     }
+
+    public function test_last_month_preset_on_march_31_selects_february_without_overflow(): void
+    {
+        $this->travelTo('2026-03-31 12:00:00');
+
+        $user = User::factory()->create();
+
+        Livewire::actingAs($user)
+            ->test(GrafikPembelian::class)
+            ->set('filters.period_preset', 'last_month')
+            ->assertSet('filters.start_date', '2026-02-01')
+            ->assertSet('filters.end_date', '2026-02-28');
+    }
+
+    public function test_top_suppliers_table_remaining_debt_matches_unpaid_and_partial_invoices_only(): void
+    {
+        $user = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'PT Kalibrasi Medis', 'is_active' => true]);
+
+        // Legacy Paid invoice with paid_amount accidentally still 0 should NOT be counted as debt
+        InboundInvoice::create([
+            'supplier_id' => $supplier->id,
+            'invoice_number' => 'INB-PAID-ZERO',
+            'issue_date' => '2026-10-01',
+            'due_date' => '2026-10-31',
+            'status' => 'Paid',
+            'subtotal_amount' => 1000000,
+            'tax_amount' => 110000,
+            'total_amount' => 1110000,
+            'paid_amount' => 0,
+        ]);
+
+        InboundInvoice::create([
+            'supplier_id' => $supplier->id,
+            'invoice_number' => 'INB-PARTIAL-DEBT',
+            'issue_date' => '2026-10-10',
+            'due_date' => '2026-11-10',
+            'status' => 'Partial',
+            'subtotal_amount' => 500000,
+            'tax_amount' => 55000,
+            'total_amount' => 555000,
+            'paid_amount' => 155000,
+        ]);
+
+        $filters = [
+            'period_preset' => 'all',
+            'start_date' => null,
+            'end_date' => null,
+            'supplier_id' => null,
+            'status' => null,
+        ];
+
+        Livewire::actingAs($user)
+            ->test(PurchaseAnalyticsStatsOverview::class, ['filters' => $filters])
+            ->assertSee('Rp 400.000');
+
+        Livewire::actingAs($user)
+            ->test(TopSuppliersTableWidget::class, ['filters' => $filters])
+            ->assertSee('PT Kalibrasi Medis')
+            ->assertSee("Rp\u{00A0}400.000")
+            ->assertDontSee("Rp\u{00A0}1.510.000");
+    }
 }

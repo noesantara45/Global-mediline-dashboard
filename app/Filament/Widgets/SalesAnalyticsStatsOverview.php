@@ -65,12 +65,18 @@ class SalesAnalyticsStatsOverview extends BaseWidget
 
     protected function getStats(): array
     {
-        $query = $this->getFilteredQuery();
+        $aggregates = $this->getFilteredQuery()
+            ->selectRaw(
+                'COALESCE(SUM(total_amount), 0) as total_revenue,
+                 COUNT(*) as invoice_count,
+                 COUNT(DISTINCT client_id) as active_clients'
+            )
+            ->first();
 
-        $totalRevenue = (float) (clone $query)->sum('total_amount');
-        $invoiceCount = (int) (clone $query)->count();
+        $totalRevenue = (float) ($aggregates?->total_revenue ?? 0);
+        $invoiceCount = (int) ($aggregates?->invoice_count ?? 0);
         $averageOrder = $invoiceCount > 0 ? ($totalRevenue / $invoiceCount) : 0;
-        $activeClients = (int) (clone $query)->distinct('client_id')->count('client_id');
+        $activeClients = (int) ($aggregates?->active_clients ?? 0);
 
         return [
             Stat::make('Total Omzet Penjualan', 'Rp '.number_format($totalRevenue, 0, ',', '.'))

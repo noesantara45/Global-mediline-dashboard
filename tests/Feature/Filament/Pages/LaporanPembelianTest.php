@@ -9,6 +9,7 @@ use App\Models\InboundInvoiceItem;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -178,5 +179,119 @@ class LaporanPembelianTest extends TestCase
 
         $response->assertOk();
         $this->assertStringContainsString('application/pdf', (string) $response->headers->get('content-type'));
+    }
+
+    public function test_summary_totals_exclude_cancelled_inbound_invoices_and_gross_sort_works(): void
+    {
+        $user = User::factory()->create();
+        $supplier = Supplier::create([
+            'name' => 'PT. BIO CARE SEJAHTERA',
+            'is_active' => true,
+        ]);
+
+        $activeDiscounted = InboundInvoice::create([
+            'supplier_id' => $supplier->id,
+            'invoice_number' => 'INB-ACTIVE-01',
+            'issue_date' => '2026-10-01',
+            'due_date' => '2026-11-01',
+            'status' => 'Partial',
+            'subtotal_amount' => 1800000,
+            'tax_amount' => 198000,
+            'total_amount' => 1998000,
+            'paid_amount' => 500000,
+        ]);
+        InboundInvoiceItem::create([
+            'inbound_invoice_id' => $activeDiscounted->id,
+            'item_name' => 'Reagen A',
+            'quantity' => 3,
+            'unit' => 'Kit',
+            'unit_price' => 1000000,
+            'subtotal' => 1800000,
+        ]);
+
+        $newerLowerGross = InboundInvoice::create([
+            'supplier_id' => $supplier->id,
+            'invoice_number' => 'INB-ACTIVE-02',
+            'issue_date' => '2026-10-20',
+            'due_date' => '2026-11-20',
+            'status' => 'Paid',
+            'subtotal_amount' => 2000000,
+            'tax_amount' => 220000,
+            'total_amount' => 2220000,
+            'paid_amount' => 2220000,
+        ]);
+        InboundInvoiceItem::create([
+            'inbound_invoice_id' => $newerLowerGross->id,
+            'item_name' => 'Reagen B',
+            'quantity' => 2,
+            'unit' => 'Kit',
+            'unit_price' => 1000000,
+            'subtotal' => 2000000,
+        ]);
+
+        $cancelledInvoice = InboundInvoice::create([
+            'supplier_id' => $supplier->id,
+            'invoice_number' => 'INB-CANCEL-01',
+            'issue_date' => '2026-10-25',
+            'due_date' => '2026-11-25',
+            'status' => 'Cancelled',
+            'subtotal_amount' => 5000000,
+            'tax_amount' => 550000,
+            'total_amount' => 5550000,
+            'paid_amount' => 1000000,
+        ]);
+        InboundInvoiceItem::create([
+            'inbound_invoice_id' => $cancelledInvoice->id,
+            'item_name' => 'Reagen Batal',
+            'quantity' => 5,
+            'unit' => 'Kit',
+            'unit_price' => 1000000,
+            'subtotal' => 5000000,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(LaporanPembelian::class)
+            ->assertTableColumnSummarySet('gross_purchase', 'total_gross', 5000000)
+            ->assertTableColumnSummarySet('total_discount', 'total_discount', 1200000)
+            ->assertTableColumnSummarySet('tax_amount', 'total_ppn', 418000)
+            ->assertTableColumnSummarySet('subtotal_amount', 'total_subtotal', 3800000)
+            ->assertTableColumnSummarySet('total_amount', 'total_pembelian', 4218000)
+            ->assertTableColumnSummarySet('paid_amount', 'total_dibayar', 2720000)
+            ->filterTable('status', 'Unpaid')
+            ->resetTableFilters()
+            ->sortTable('gross_purchase', 'desc')
+            ->assertCanSeeTableRecords([
+                $cancelledInvoice,
+                $activeDiscounted,
+                $newerLowerGross,
+            ], inOrder: true);
+    }
+
+    public function test_serves_original_inbound_file_only_to_authenticated_users_from_private_disk(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('inbound-invoices/faktur-supplier.pdf', '%PDF-1.4 dummy content');
+
+        $user = User::factory()->create();
+        $supplier = Supplier::create(['name' => 'PT Supplier Aman', 'is_active' => true]);
+        $invoice = InboundInvoice::create([
+            'supplier_id' => $supplier->id,
+            'pdf_file' => 'inbound-invoices/faktur-supplier.pdf',
+            'invoice_number' => 'INV-PRIVATE-01',
+            'issue_date' => '2026-11-01',
+            'due_date' => '2026-12-01',
+            'status' => 'Unpaid',
+            'subtotal_amount' => 100000,
+            'tax_amount' => 11000,
+            'total_amount' => 111000,
+            'paid_amount' => 0,
+        ]);
+
+        $this->get(route('inbound-invoice.original-file', $invoice))
+            ->assertRedirect(route('login'));
+
+        $response = $this->actingAs($user)->get(route('inbound-invoice.original-file', $invoice));
+        $response->assertOk();
+        $this->assertSame('nosniff', $response->headers->get('X-Content-Type-Options'));
     }
 }

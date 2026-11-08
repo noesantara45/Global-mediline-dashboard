@@ -42,6 +42,31 @@ class Product extends Model
         'price' => 'decimal:2',
     ];
 
+    protected static function booted(): void
+    {
+        static::updated(function (Product $product): void {
+            if (! $product->wasChanged('name')) {
+                return;
+            }
+
+            $oldName = (string) $product->getOriginal('name');
+            $newName = (string) $product->name;
+
+            if ($oldName !== '' && $newName !== '' && $oldName !== $newName) {
+                OutboundInvoiceItem::query()->where('item_name', $oldName)->update(['item_name' => $newName]);
+                InboundInvoiceItem::query()->where('item_name', $oldName)->update(['item_name' => $newName]);
+            }
+        });
+
+        static::deleting(function (Product $product): ?bool {
+            if ($product->outboundItems()->exists() || $product->inboundItems()->exists()) {
+                return false;
+            }
+
+            return null;
+        });
+    }
+
     /**
      * @return array<string, string>
      */
@@ -71,6 +96,10 @@ class Product extends Model
         return $this->hasMany(InboundInvoiceItem::class, 'item_name', 'name');
     }
 
+    private ?string $resolvedPhotoKey = null;
+
+    private ?string $resolvedPhotoUrl = null;
+
     /**
      * Resolves the complete asset URL for the product photo.
      */
@@ -80,24 +109,27 @@ class Product extends Model
             return null;
         }
 
-        $filename = basename($this->photo);
+        $photo = (string) $this->photo;
+        if ($this->resolvedPhotoKey === $photo) {
+            return $this->resolvedPhotoUrl;
+        }
+
+        $filename = basename($photo);
+        $url = null;
 
         if (file_exists(public_path('images/products/'.$filename))) {
-            return asset('images/products/'.$filename);
+            $url = asset('images/products/'.$filename);
+        } elseif (file_exists(public_path('images/'.$photo))) {
+            $url = asset('images/'.$photo);
+        } elseif (file_exists(storage_path('app/public/products/'.$filename))) {
+            $url = asset('storage/products/'.$filename);
+        } elseif (file_exists(storage_path('app/public/'.$photo))) {
+            $url = asset('storage/'.$photo);
         }
 
-        if (file_exists(public_path('images/'.$this->photo))) {
-            return asset('images/'.$this->photo);
-        }
+        $this->resolvedPhotoKey = $photo;
+        $this->resolvedPhotoUrl = $url;
 
-        if (file_exists(storage_path('app/public/products/'.$filename))) {
-            return asset('storage/products/'.$filename);
-        }
-
-        if (file_exists(storage_path('app/public/'.$this->photo))) {
-            return asset('storage/'.$this->photo);
-        }
-
-        return null;
+        return $url;
     }
 }

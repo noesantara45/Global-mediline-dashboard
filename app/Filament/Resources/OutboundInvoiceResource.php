@@ -42,21 +42,25 @@ class OutboundInvoiceResource extends Resource
                                     // Default due date +30 days
                                     $set('due_date', now()->addDays(30)->format('Y-m-d'));
                                 }
-                                // Auto generate invoice number JL-YMD-RAND
+                                // Auto generate sequential daily invoice number
                                 if (! $get('invoice_number')) {
-                                    $set('invoice_number', 'JL'.now()->format('ymd').rand(10, 99));
+                                    $set('invoice_number', self::generateNextInvoiceNumber());
                                 }
                             }),
                         Forms\Components\TextInput::make('invoice_number')
                             ->label('No Faktur')
+                            ->default(fn (): string => self::generateNextInvoiceNumber())
                             ->required()
-                            ->readOnly()
+                            ->unique(ignoreRecord: true)
                             ->maxLength(255),
                         Forms\Components\DatePicker::make('issue_date')
                             ->label('Tanggal')
+                            ->default(fn (): string => now()->format('Y-m-d'))
                             ->required(),
                         Forms\Components\DatePicker::make('due_date')
                             ->label('Jatuh Tempo')
+                            ->default(fn (): string => now()->addDays(30)->format('Y-m-d'))
+                            ->afterOrEqual('issue_date')
                             ->required(),
                         Forms\Components\Select::make('status')
                             ->options([
@@ -66,6 +70,19 @@ class OutboundInvoiceResource extends Resource
                                 'Cancelled' => 'Cancelled',
                             ])
                             ->default('Unpaid')
+                            ->live()
+                            ->afterStateUpdated(function (?string $state, Forms\Set $set, Forms\Get $get): void {
+                                if ($state === 'Paid') {
+                                    $total = InboundInvoiceResource::parseIndonesianAmount((string) $get('total_amount'));
+                                    $paid = InboundInvoiceResource::parseIndonesianAmount((string) $get('paid_amount'));
+
+                                    if ($total > 0 && $paid <= 0) {
+                                        $set('paid_amount', number_format($total, 0, ',', '.'));
+                                    }
+                                } elseif ($state === 'Unpaid') {
+                                    $set('paid_amount', '0');
+                                }
+                            })
                             ->required(),
                         Forms\Components\TextInput::make('sales')
                             ->label('Sales')
@@ -106,7 +123,7 @@ class OutboundInvoiceResource extends Resource
                                         $product = Product::where('name', $state)->first();
                                         if ($product) {
                                             $set('unit', $product->unit);
-                                            $set('unit_price', $product->price);
+                                            $set('unit_price', number_format((float) $product->price, 0, ',', '.'));
                                             self::updateItemSubtotal($set, $get);
 
                                             if (blank($get('../../division')) && filled($product->division)) {
@@ -118,6 +135,7 @@ class OutboundInvoiceResource extends Resource
                                 Forms\Components\TextInput::make('quantity')
                                     ->label('Qty')
                                     ->numeric()
+                                    ->minValue(1)
                                     ->default(1)
                                     ->required()
                                     ->live()
@@ -142,19 +160,37 @@ class OutboundInvoiceResource extends Resource
                                 Forms\Components\TextInput::make('discount_percentage')
                                     ->label('Diskon 1 (%)')
                                     ->numeric()
+                                    ->minValue(0)
+                                    ->rule('min:0')
                                     ->default(0)
+                                    ->dehydrateStateUsing(fn ($state): float => max(0, (float) ($state ?? 0)))
                                     ->live()
-                                    ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::updateItemSubtotal($set, $get))
+                                    ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get, $state): void {
+                                        if ((float) $state < 0) {
+                                            $set('discount_percentage', 0);
+                                        }
+                                        self::updateItemSubtotal($set, $get);
+                                    })
                                     ->columnSpan(1),
                                 Forms\Components\TextInput::make('discount_2_percentage')
                                     ->label('Diskon 2 (%)')
                                     ->numeric()
+                                    ->minValue(0)
+                                    ->rule('min:0')
                                     ->default(0)
+                                    ->dehydrateStateUsing(fn ($state): float => max(0, (float) ($state ?? 0)))
+                                    ->live()
+                                    ->afterStateUpdated(function (Forms\Set $set, $state): void {
+                                        if ((float) $state < 0) {
+                                            $set('discount_2_percentage', 0);
+                                        }
+                                    })
                                     ->columnSpan(1),
                                 Forms\Components\TextInput::make('subtotal')
                                     ->label('Jumlah')
                                     ->numeric()
                                     ->required()
+                                    ->dehydrateStateUsing(fn ($state): float => (float) ($state ?? 0))
                                     ->readOnly()
                                     ->columnSpan(2),
                             ])
@@ -169,19 +205,25 @@ class OutboundInvoiceResource extends Resource
                             ->label('Subtotal')
                             ->numeric()
                             ->default(0)
+                            ->dehydrateStateUsing(fn ($state): float => (float) ($state ?? 0))
                             ->readOnly(),
                         Forms\Components\TextInput::make('tax_percentage')
                             ->label('PPN (%)')
                             ->numeric()
+                            ->minValue(0)
+                            ->maxValue(100)
                             ->default(11)
                             ->live()
                             ->dehydrated(false)
                             ->afterStateUpdated(fn (Forms\Set $set, Forms\Get $get) => self::updateTotals($set, $get)),
-                        Forms\Components\Hidden::make('tax_amount')->default(0),
+                        Forms\Components\Hidden::make('tax_amount')
+                            ->default(0)
+                            ->dehydrateStateUsing(fn ($state): float => (float) ($state ?? 0)),
                         Forms\Components\TextInput::make('total_amount')
                             ->label('Total Tagihan')
                             ->numeric()
                             ->default(0)
+                            ->dehydrateStateUsing(fn ($state): float => (float) ($state ?? 0))
                             ->readOnly(),
                         Forms\Components\TextInput::make('paid_amount')
                             ->label('Sudah Dibayar')
@@ -196,35 +238,75 @@ class OutboundInvoiceResource extends Resource
             ]);
     }
 
+    public static function generateNextInvoiceNumber(): string
+    {
+        $datePrefix = 'JL'.now()->format('ymd');
+        $existingNumbers = OutboundInvoice::query()
+            ->where('invoice_number', 'like', $datePrefix.'%')
+            ->pluck('invoice_number');
+
+        $maxSequence = 0;
+        foreach ($existingNumbers as $existingNumber) {
+            if (preg_match('/^'.preg_quote($datePrefix, '/').'-?(\d+)$/', (string) $existingNumber, $matches)) {
+                $maxSequence = max($maxSequence, (int) $matches[1]);
+            }
+        }
+
+        $nextSequence = $maxSequence + 1;
+        do {
+            $candidate = $datePrefix.'-'.str_pad((string) $nextSequence, 3, '0', STR_PAD_LEFT);
+            $nextSequence++;
+        } while (OutboundInvoice::query()->where('invoice_number', $candidate)->exists());
+
+        return $candidate;
+    }
+
     /**
      * @return array<string, array<string, string>|string>
      */
     public static function groupedProductOptions(): array
     {
-        $products = Product::query()->orderBy('division')->orderBy('name')->get();
-        $hasDivision = $products->contains(fn (Product $product): bool => filled($product->division));
+        return once(function (): array {
+            $products = Product::query()->orderBy('division')->orderBy('name')->get();
+            $hasDivision = $products->contains(fn (Product $product): bool => filled($product->division));
 
-        if (! $hasDivision) {
-            return $products->pluck('name', 'name')->toArray();
-        }
+            if (! $hasDivision) {
+                return $products->pluck('name', 'name')->toArray();
+            }
 
-        $grouped = [];
-        foreach ($products as $product) {
-            $groupLabel = $product->division ?: 'Belum Ada Divisi';
-            $grouped[$groupLabel][$product->name] = $product->name;
-        }
+            $grouped = [];
+            foreach ($products as $product) {
+                $groupLabel = $product->division ?: 'Belum Ada Divisi';
+                $grouped[$groupLabel][$product->name] = $product->name;
+            }
 
-        return $grouped;
+            return $grouped;
+        });
     }
 
     public static function updateItemSubtotal(Forms\Set $set, Forms\Get $get): void
     {
         $qty = (float) $get('quantity') ?: 0;
         $price = InboundInvoiceResource::parseIndonesianAmount((string) $get('unit_price'));
-        $discount = (float) $get('discount_percentage') ?: 0;
+        $discount = max(0, (float) $get('discount_percentage') ?: 0);
 
         $subtotal = $qty * $price * (1 - ($discount / 100));
         $set('subtotal', round($subtotal));
+
+        $items = $get('../../items') ?? [];
+        $subtotalAmount = 0;
+
+        foreach ($items as $item) {
+            $subtotalAmount += (float) ($item['subtotal'] ?? 0);
+        }
+
+        $taxPercentage = (float) ($get('../../tax_percentage') ?? 11);
+        $taxAmount = $subtotalAmount * ($taxPercentage / 100);
+        $totalAmount = $subtotalAmount + $taxAmount;
+
+        $set('../../subtotal_amount', round($subtotalAmount));
+        $set('../../tax_amount', round($taxAmount));
+        $set('../../total_amount', round($totalAmount));
     }
 
     public static function updateTotals(Forms\Set $set, Forms\Get $get): void

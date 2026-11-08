@@ -376,18 +376,18 @@ class LaporanPenjualan extends Page implements HasTable
 
                             foreach ($query->lazy(200) as $record) {
                                 fputcsv($handle, [
-                                    $record->invoice_number,
-                                    $record->client?->name ?? '-',
-                                    $record->sales ?? '-',
-                                    $record->division ?? '-',
-                                    $record->issue_date,
+                                    self::sanitizeCsvCell($record->invoice_number),
+                                    self::sanitizeCsvCell($record->client?->name ?? '-'),
+                                    self::sanitizeCsvCell($record->sales ?? '-'),
+                                    self::sanitizeCsvCell($record->division ?? '-'),
+                                    self::sanitizeCsvCell($record->issue_date),
                                     $record->gross_sale,
                                     $record->total_discount,
                                     $record->tax_amount,
                                     $record->subtotal_amount,
                                     $record->total_amount,
-                                    $record->due_date,
-                                    $record->status,
+                                    self::sanitizeCsvCell($record->due_date),
+                                    self::sanitizeCsvCell($record->status),
                                 ]);
                             }
 
@@ -417,5 +417,23 @@ class LaporanPenjualan extends Page implements HasTable
             ->defaultSort('issue_date', 'desc')
             ->defaultKeySort()
             ->striped();
+    }
+
+    public static function sanitizeCsvCell(mixed $value): string|int|float
+    {
+        if (is_int($value) || is_float($value)) {
+            return $value;
+        }
+
+        $stringValue = (string) $value;
+        if ($stringValue === '' || $stringValue === '-') {
+            return $stringValue;
+        }
+
+        if (in_array($stringValue[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'".$stringValue;
+        }
+
+        return $stringValue;
     }
 }

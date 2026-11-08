@@ -22,46 +22,42 @@ class StatsOverview extends BaseWidget
 
     protected function getStats(): array
     {
-        $currentMonth = now()->month;
-        $currentYear = now()->year;
+        $monthStart = now()->startOfMonth()->toDateString();
+        $monthEnd = now()->endOfMonth()->toDateString();
+        $today = now()->toDateString();
 
-        // 1. Omset Penjualan Bulan Ini (exclude Cancelled)
-        $activeOutboundThisMonth = OutboundInvoice::query()
-            ->where('status', '!=', 'Cancelled')
-            ->whereMonth('issue_date', $currentMonth)
-            ->whereYear('issue_date', $currentYear);
+        $outboundStats = OutboundInvoice::query()
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN status != 'Cancelled' AND issue_date >= ? AND issue_date <= ? THEN total_amount ELSE 0 END), 0) as month_revenue,
+                 COALESCE(SUM(CASE WHEN status != 'Cancelled' AND issue_date >= ? AND issue_date <= ? THEN 1 ELSE 0 END), 0) as month_count,
+                 COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') AND total_amount > paid_amount THEN total_amount - paid_amount ELSE 0 END), 0) as receivable_remaining,
+                 COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') AND due_date < ? THEN 1 ELSE 0 END), 0) as overdue_count",
+                [$monthStart, $monthEnd, $monthStart, $monthEnd, $today]
+            )
+            ->first();
 
-        $outboundRevenue = (float) (clone $activeOutboundThisMonth)->sum('total_amount');
-        $outboundCount = (int) (clone $activeOutboundThisMonth)->count();
+        $outboundRevenue = (float) ($outboundStats?->month_revenue ?? 0);
+        $outboundCount = (int) ($outboundStats?->month_count ?? 0);
+        $piutangKlien = (float) ($outboundStats?->receivable_remaining ?? 0);
+        $overdueOutboundCount = (int) ($outboundStats?->overdue_count ?? 0);
 
-        // 2. Piutang Klien (Unpaid & Partial)
-        $unpaidOutboundQuery = OutboundInvoice::whereIn('status', ['Unpaid', 'Partial']);
-        $unpaidOutboundTotal = (float) (clone $unpaidOutboundQuery)->sum('total_amount');
-        $unpaidOutboundPaid = (float) (clone $unpaidOutboundQuery)->sum('paid_amount');
-        $piutangKlien = max(0, $unpaidOutboundTotal - $unpaidOutboundPaid);
+        $inboundStats = InboundInvoice::query()
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN status != 'Cancelled' AND issue_date >= ? AND issue_date <= ? THEN total_amount ELSE 0 END), 0) as month_expense,
+                 COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') AND total_amount > paid_amount THEN total_amount - paid_amount ELSE 0 END), 0) as payable_remaining,
+                 COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') THEN 1 ELSE 0 END), 0) as unpaid_count",
+                [$monthStart, $monthEnd]
+            )
+            ->first();
 
-        $overdueOutboundCount = OutboundInvoice::whereIn('status', ['Unpaid', 'Partial'])
-            ->whereDate('due_date', '<', now()->toDateString())
-            ->count();
-
-        // 3. Hutang ke Supplier (Unpaid & Partial)
-        $unpaidInboundQuery = InboundInvoice::whereIn('status', ['Unpaid', 'Partial']);
-        $unpaidInboundTotal = (float) (clone $unpaidInboundQuery)->sum('total_amount');
-        $unpaidInboundPaid = (float) (clone $unpaidInboundQuery)->sum('paid_amount');
-        $hutangSupplier = max(0, $unpaidInboundTotal - $unpaidInboundPaid);
-        $unpaidInboundCount = (int) (clone $unpaidInboundQuery)->count();
-
-        // 4. Pengeluaran Pembelian & Margin Kas Bersih Bulan Ini (exclude Cancelled)
-        $inboundExpense = (float) InboundInvoice::query()
-            ->where('status', '!=', 'Cancelled')
-            ->whereMonth('issue_date', $currentMonth)
-            ->whereYear('issue_date', $currentYear)
-            ->sum('total_amount');
+        $inboundExpense = (float) ($inboundStats?->month_expense ?? 0);
+        $hutangSupplier = (float) ($inboundStats?->payable_remaining ?? 0);
+        $unpaidInboundCount = (int) ($inboundStats?->unpaid_count ?? 0);
 
         $marginKas = $outboundRevenue - $inboundExpense;
 
         // 6-month mini sparkline trends (2 aggregate queries, safe against month-end overflow)
-        $sparklineStart = now()->startOfMonth()->subMonths(5);
+        $sparklineStart = now()->startOfMonth()->subMonthsNoOverflow(5);
         $sparklineEnd = now()->endOfMonth();
 
         $salesTrend = Trend::query(OutboundInvoice::query()->where('status', '!=', 'Cancelled'))

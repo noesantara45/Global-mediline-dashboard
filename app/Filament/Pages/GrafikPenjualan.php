@@ -65,16 +65,16 @@ class GrafikPenjualan extends Page
                                     $set('end_date', now()->endOfMonth()->toDateString()),
                                 ],
                                 'last_month' => [
-                                    $set('start_date', now()->subMonth()->startOfMonth()->toDateString()),
-                                    $set('end_date', now()->subMonth()->endOfMonth()->toDateString()),
+                                    $set('start_date', now()->subMonthNoOverflow()->startOfMonth()->toDateString()),
+                                    $set('end_date', now()->subMonthNoOverflow()->endOfMonth()->toDateString()),
                                 ],
                                 'last_30_days' => [
                                     $set('start_date', now()->subDays(30)->toDateString()),
                                     $set('end_date', now()->toDateString()),
                                 ],
                                 'last_year' => [
-                                    $set('start_date', now()->subYear()->startOfYear()->toDateString()),
-                                    $set('end_date', now()->subYear()->endOfYear()->toDateString()),
+                                    $set('start_date', now()->subYearNoOverflow()->startOfYear()->toDateString()),
+                                    $set('end_date', now()->subYearNoOverflow()->endOfYear()->toDateString()),
                                 ],
                                 'all' => [
                                     $set('start_date', null),
@@ -91,7 +91,11 @@ class GrafikPenjualan extends Page
                         ->displayFormat('d/m/Y')
                         ->native(false)
                         ->closeOnDateSelection()
-                        ->afterStateUpdated(fn (Forms\Set $set) => $set('period_preset', 'custom')),
+                        ->afterStateUpdated(function ($state, Forms\Set $set): void {
+                            if ($state !== null) {
+                                $set('period_preset', 'custom');
+                            }
+                        }),
 
                     Forms\Components\DatePicker::make('end_date')
                         ->label('Sampai Tanggal')
@@ -100,7 +104,11 @@ class GrafikPenjualan extends Page
                         ->displayFormat('d/m/Y')
                         ->native(false)
                         ->closeOnDateSelection()
-                        ->afterStateUpdated(fn (Forms\Set $set) => $set('period_preset', 'custom')),
+                        ->afterStateUpdated(function ($state, Forms\Set $set): void {
+                            if ($state !== null) {
+                                $set('period_preset', 'custom');
+                            }
+                        }),
 
                     Forms\Components\Select::make('division')
                         ->label('Divisi')

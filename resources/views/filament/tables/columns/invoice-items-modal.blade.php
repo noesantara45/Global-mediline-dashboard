@@ -2,9 +2,13 @@
     $items = $record->items ?? collect();
     $grossTotal = (float) $record->gross_sale;
     $discTotal = (float) $record->total_discount;
-    $subtotal = (float) $record->subtotal_amount > 0 ? (float) $record->subtotal_amount : (float) $items->sum('subtotal');
-    $tax = (float) $record->tax_amount > 0 ? (float) $record->tax_amount : round($subtotal * 0.11);
-    $netTotal = (float) $record->total_amount > 0 ? (float) $record->total_amount : ($subtotal + $tax);
+    $hasSavedTotals = (float) $record->subtotal_amount > 0 || (float) $record->total_amount > 0;
+    $subtotal = $hasSavedTotals ? (float) $record->subtotal_amount : (float) $items->sum('subtotal');
+    $tax = $hasSavedTotals ? (float) $record->tax_amount : round($subtotal * 0.11);
+    $netTotal = $hasSavedTotals ? (float) $record->total_amount : ($subtotal + $tax);
+    $taxLabel = $tax == 0.0
+        ? 'PPN (0%):'
+        : ($subtotal > 0 ? 'PPN (' . round(($tax / $subtotal) * 100) . '%):' : 'PPN:');
 @endphp
 
 <div class="space-y-4">
@@ -18,7 +22,7 @@
             type="button"
             x-data="{ copied: false }"
             x-on:click="
-                window.navigator.clipboard.writeText('{{ $record->invoice_number }}');
+                window.navigator.clipboard.writeText(@js((string) $record->invoice_number));
                 copied = true;
                 setTimeout(() => copied = false, 2000);
             "
@@ -145,7 +149,7 @@
                     </td>
                 </tr>
                 <tr>
-                    <td colspan="8" class="px-3 py-2 text-right text-gray-600 dark:text-gray-400 uppercase text-[11px]">PPN (11%):</td>
+                    <td colspan="8" class="px-3 py-2 text-right text-gray-600 dark:text-gray-400 uppercase text-[11px]">{{ $taxLabel }}</td>
                     <td class="px-3 py-2 text-right font-mono text-gray-800 dark:text-gray-200">
                         Rp {{ number_format($tax, 0, ',', '.') }}
                     </td>

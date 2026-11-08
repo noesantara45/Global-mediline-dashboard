@@ -66,16 +66,51 @@ class SalesMonthlyChart extends ChartWidget
 
     protected function getData(): array
     {
+        $baseQuery = $this->getFilteredQuery();
         $startDateStr = $this->filters['start_date'] ?? null;
         $endDateStr = $this->filters['end_date'] ?? null;
 
-        $start = $startDateStr ? Carbon::parse($startDateStr)->startOfDay() : now()->startOfYear();
-        $end = $endDateStr ? Carbon::parse($endDateStr)->endOfDay() : now()->endOfYear();
+        $minDate = null;
+        $maxDate = null;
+
+        if (! $startDateStr || ! $endDateStr) {
+            $dateRange = (clone $baseQuery)
+                ->selectRaw('MIN(issue_date) as min_date, MAX(issue_date) as max_date')
+                ->toBase()
+                ->first();
+            $minDate = $dateRange?->min_date;
+            $maxDate = $dateRange?->max_date;
+        }
+
+        if (! $startDateStr && ! $endDateStr) {
+            if ($minDate && $maxDate) {
+                $start = Carbon::parse($minDate)->startOfMonth();
+                $end = Carbon::parse($maxDate)->endOfMonth();
+
+                if ($start->diffInMonths($end) < 5) {
+                    $start = (clone $end)->startOfMonth()->subMonthsNoOverflow(5);
+                }
+            } else {
+                $start = now()->startOfYear();
+                $end = now()->endOfYear();
+            }
+        } else {
+            $start = $startDateStr
+                ? Carbon::parse($startDateStr)->startOfDay()
+                : ($minDate ? Carbon::parse($minDate)->startOfMonth() : now()->startOfYear());
+            $end = $endDateStr
+                ? Carbon::parse($endDateStr)->endOfDay()
+                : ($maxDate ? Carbon::parse($maxDate)->endOfMonth() : now()->endOfYear());
+        }
+
+        if ($start->gt($end)) {
+            $end = (clone $start)->endOfMonth();
+        }
 
         $diffInDays = $start->diffInDays($end);
         $isDaily = ($diffInDays <= 31);
 
-        $trend = Trend::query($this->getFilteredQuery())
+        $trend = Trend::query($baseQuery)
             ->dateColumn('issue_date')
             ->between(start: $start, end: $end);
 

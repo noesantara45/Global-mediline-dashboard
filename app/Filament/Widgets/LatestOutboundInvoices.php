@@ -45,13 +45,19 @@ class LatestOutboundInvoices extends BaseWidget
      */
     public function getSummaryFooterData(): array
     {
-        $visibleCount = min(5, OutboundInvoice::query()->count());
-        $activeQuery = OutboundInvoice::query()->where('status', '!=', 'Cancelled');
-        $activeCount = (int) (clone $activeQuery)->count();
-        $activeTotal = (float) (clone $activeQuery)->sum('total_amount');
+        $stats = OutboundInvoice::query()
+            ->selectRaw(
+                "COUNT(*) as total_count,
+                 COALESCE(SUM(CASE WHEN status != 'Cancelled' THEN 1 ELSE 0 END), 0) as active_count,
+                 COALESCE(SUM(CASE WHEN status != 'Cancelled' THEN total_amount ELSE 0 END), 0) as active_total,
+                 COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') AND total_amount > paid_amount THEN total_amount - paid_amount ELSE 0 END), 0) as remaining_amount"
+            )
+            ->first();
 
-        $unpaidQuery = OutboundInvoice::query()->whereIn('status', ['Unpaid', 'Partial']);
-        $remaining = max(0, (float) (clone $unpaidQuery)->sum('total_amount') - (float) (clone $unpaidQuery)->sum('paid_amount'));
+        $visibleCount = min(5, (int) ($stats?->total_count ?? 0));
+        $activeCount = (int) ($stats?->active_count ?? 0);
+        $activeTotal = (float) ($stats?->active_total ?? 0);
+        $remaining = (float) ($stats?->remaining_amount ?? 0);
 
         return [
             'visibleCount' => $visibleCount,

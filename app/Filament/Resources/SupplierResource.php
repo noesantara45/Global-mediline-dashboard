@@ -6,9 +6,11 @@ use App\Filament\Resources\SupplierResource\Pages;
 use App\Models\Supplier;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class SupplierResource extends Resource
 {
@@ -42,8 +44,11 @@ class SupplierResource extends Resource
                 Forms\Components\TextInput::make('top_days')
                     ->label('Term of Payment (Hari)')
                     ->numeric()
-                    ->default(0),
+                    ->minValue(0)
+                    ->default(0)
+                    ->dehydrateStateUsing(fn ($state): int => max(0, (int) ($state ?? 0))),
                 Forms\Components\Toggle::make('is_active')
+                    ->default(true)
                     ->required(),
                 Forms\Components\Fieldset::make('Pengaturan OCR (Otomasi Faktur)')
                     ->schema([
@@ -105,7 +110,20 @@ class SupplierResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function (Tables\Actions\DeleteBulkAction $action, Collection $records): void {
+                            $hasInvoices = $records->contains(fn (Supplier $record): bool => $record->inboundInvoices()->exists());
+
+                            if ($hasInvoices) {
+                                Notification::make()
+                                    ->title('Tidak dapat menghapus supplier')
+                                    ->body('Satu atau lebih supplier yang dipilih masih memiliki histori faktur pembelian. Nonaktifkan status aktif sebagai gantinya.')
+                                    ->danger()
+                                    ->send();
+
+                                $action->cancel();
+                            }
+                        }),
                 ]),
             ]);
     }

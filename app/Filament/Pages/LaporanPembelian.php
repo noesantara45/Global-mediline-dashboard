@@ -14,7 +14,6 @@ use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Storage;
 
 class LaporanPembelian extends Page implements HasTable
 {
@@ -39,7 +38,6 @@ class LaporanPembelian extends Page implements HasTable
             ->query(
                 InboundInvoice::query()
                     ->with(['supplier', 'items'])
-                    ->latest('issue_date')
             )
             ->columns([
                 Tables\Columns\TextColumn::make('index')
@@ -69,13 +67,19 @@ class LaporanPembelian extends Page implements HasTable
                     ->label('Gross Beli')
                     ->money('IDR', locale: 'id')
                     ->sortable(query: function (Builder $query, string $direction): Builder {
-                        return $query->orderBy('subtotal_amount', $direction);
+                        $sqlDirection = $direction === 'desc' ? 'DESC' : 'ASC';
+
+                        return $query->orderByRaw(
+                            "COALESCE(NULLIF((SELECT SUM(quantity * unit_price) FROM inbound_invoice_items WHERE inbound_invoice_items.inbound_invoice_id = inbound_invoices.id), 0), inbound_invoices.subtotal_amount) {$sqlDirection}"
+                        );
                     })
                     ->summarize(
-                        Tables\Columns\Summarizers\Summarizer::make()
+                        Tables\Columns\Summarizers\Summarizer::make('total_gross')
                             ->label('Total Gross')
                             ->using(function ($query): float {
-                                $ids = (clone $query)->pluck('inbound_invoices.id');
+                                $ids = (clone $query)
+                                    ->where('inbound_invoices.status', '!=', 'Cancelled')
+                                    ->pluck('inbound_invoices.id');
                                 if ($ids->isEmpty()) {
                                     return 0.0;
                                 }
@@ -90,11 +94,20 @@ class LaporanPembelian extends Page implements HasTable
                 Tables\Columns\TextColumn::make('total_discount')
                     ->label('Diskon')
                     ->money('IDR', locale: 'id')
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        $sqlDirection = $direction === 'desc' ? 'DESC' : 'ASC';
+
+                        return $query->orderByRaw(
+                            "COALESCE((SELECT SUM(CASE WHEN (quantity * unit_price) > subtotal THEN (quantity * unit_price) - subtotal ELSE 0 END) FROM inbound_invoice_items WHERE inbound_invoice_items.inbound_invoice_id = inbound_invoices.id), 0) {$sqlDirection}"
+                        );
+                    })
                     ->summarize(
-                        Tables\Columns\Summarizers\Summarizer::make()
+                        Tables\Columns\Summarizers\Summarizer::make('total_discount')
                             ->label('Total Diskon')
                             ->using(function ($query): float {
-                                $ids = (clone $query)->pluck('inbound_invoices.id');
+                                $ids = (clone $query)
+                                    ->where('inbound_invoices.status', '!=', 'Cancelled')
+                                    ->pluck('inbound_invoices.id');
                                 if ($ids->isEmpty()) {
                                     return 0.0;
                                 }
@@ -111,8 +124,9 @@ class LaporanPembelian extends Page implements HasTable
                     ->money('IDR', locale: 'id')
                     ->sortable()
                     ->summarize(
-                        Tables\Columns\Summarizers\Sum::make()
+                        Tables\Columns\Summarizers\Sum::make('total_ppn')
                             ->label('Total PPN')
+                            ->query(fn ($query) => $query->where('inbound_invoices.status', '!=', 'Cancelled'))
                             ->money('IDR', locale: 'id')
                     ),
 
@@ -121,8 +135,9 @@ class LaporanPembelian extends Page implements HasTable
                     ->money('IDR', locale: 'id')
                     ->sortable()
                     ->summarize(
-                        Tables\Columns\Summarizers\Sum::make()
+                        Tables\Columns\Summarizers\Sum::make('total_subtotal')
                             ->label('Total Subtotal')
+                            ->query(fn ($query) => $query->where('inbound_invoices.status', '!=', 'Cancelled'))
                             ->money('IDR', locale: 'id')
                     ),
 
@@ -132,8 +147,9 @@ class LaporanPembelian extends Page implements HasTable
                     ->weight('bold')
                     ->sortable()
                     ->summarize(
-                        Tables\Columns\Summarizers\Sum::make()
+                        Tables\Columns\Summarizers\Sum::make('total_pembelian')
                             ->label('Total Pembelian')
+                            ->query(fn ($query) => $query->where('inbound_invoices.status', '!=', 'Cancelled'))
                             ->money('IDR', locale: 'id')
                     ),
 
@@ -142,8 +158,9 @@ class LaporanPembelian extends Page implements HasTable
                     ->money('IDR', locale: 'id')
                     ->sortable()
                     ->summarize(
-                        Tables\Columns\Summarizers\Sum::make()
+                        Tables\Columns\Summarizers\Sum::make('total_dibayar')
                             ->label('Total Dibayar')
+                            ->query(fn ($query) => $query->where('inbound_invoices.status', '!=', 'Cancelled'))
                             ->money('IDR', locale: 'id')
                     ),
 
@@ -310,7 +327,7 @@ class LaporanPembelian extends Page implements HasTable
                     ->color('info')
                     ->tooltip('Lihat File Faktur Supplier')
                     ->visible(fn (InboundInvoice $record): bool => filled($record->pdf_file))
-                    ->url(fn (InboundInvoice $record): string => Storage::disk('public')->url((string) $record->pdf_file))
+                    ->url(fn (InboundInvoice $record): string => route('inbound-invoice.original-file', $record))
                     ->openUrlInNewTab(),
 
                 Tables\Actions\Action::make('edit')
@@ -321,6 +338,7 @@ class LaporanPembelian extends Page implements HasTable
                     ->url(fn (InboundInvoice $record): string => InboundInvoiceResource::getUrl('edit', ['record' => $record])),
             ])
             ->defaultSort('issue_date', 'desc')
+            ->defaultKeySort()
             ->striped();
     }
 }

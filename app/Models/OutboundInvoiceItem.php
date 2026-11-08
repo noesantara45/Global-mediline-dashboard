@@ -7,7 +7,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OutboundInvoiceItem extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'outbound_invoice_id',
+        'item_name',
+        'quantity',
+        'unit',
+        'unit_price',
+        'discount_percentage',
+        'discount_2_percentage',
+        'subtotal',
+    ];
 
     public function invoice(): BelongsTo
     {

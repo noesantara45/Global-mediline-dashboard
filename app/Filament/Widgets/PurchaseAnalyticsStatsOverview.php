@@ -53,24 +53,35 @@ class PurchaseAnalyticsStatsOverview extends BaseWidget
     {
         $query = $this->getFilteredQuery();
 
-        $totalExpense = (float) (clone $query)->sum('total_amount');
-        $totalSubtotal = (float) (clone $query)->sum('subtotal_amount');
-        $totalTax = (float) (clone $query)->sum('tax_amount');
-        $totalPaid = (float) (clone $query)->sum('paid_amount');
-        $invoiceCount = (int) (clone $query)->count();
-        $paidCount = (int) (clone $query)->where('status', 'Paid')->count();
-        $activeSuppliers = (int) (clone $query)->distinct('supplier_id')->count('supplier_id');
+        $aggregates = (clone $query)
+            ->selectRaw(
+                "COALESCE(SUM(total_amount), 0) as total_expense,
+                 COALESCE(SUM(subtotal_amount), 0) as total_subtotal,
+                 COALESCE(SUM(tax_amount), 0) as total_tax,
+                 COALESCE(SUM(paid_amount), 0) as total_paid,
+                 COUNT(*) as invoice_count,
+                 COALESCE(SUM(CASE WHEN status = 'Paid' THEN 1 ELSE 0 END), 0) as paid_count,
+                 COUNT(DISTINCT supplier_id) as active_suppliers,
+                 COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') THEN 1 ELSE 0 END), 0) as unpaid_count,
+                 COALESCE(SUM(CASE WHEN status IN ('Unpaid', 'Partial') AND total_amount > paid_amount THEN total_amount - paid_amount ELSE 0 END), 0) as unpaid_debt"
+            )
+            ->first();
 
-        $unpaidQuery = (clone $query)->whereIn('status', ['Unpaid', 'Partial']);
-        $unpaidCount = (int) (clone $unpaidQuery)->count();
-        $unpaidDebt = (float) (clone $unpaidQuery)
-            ->selectRaw('COALESCE(SUM(CASE WHEN total_amount > paid_amount THEN total_amount - paid_amount ELSE 0 END), 0) as debt')
-            ->value('debt');
+        $totalExpense = (float) ($aggregates?->total_expense ?? 0);
+        $totalSubtotal = (float) ($aggregates?->total_subtotal ?? 0);
+        $totalTax = (float) ($aggregates?->total_tax ?? 0);
+        $totalPaid = (float) ($aggregates?->total_paid ?? 0);
+        $invoiceCount = (int) ($aggregates?->invoice_count ?? 0);
+        $paidCount = (int) ($aggregates?->paid_count ?? 0);
+        $activeSuppliers = (int) ($aggregates?->active_suppliers ?? 0);
+        $unpaidCount = (int) ($aggregates?->unpaid_count ?? 0);
+        $unpaidDebt = (float) ($aggregates?->unpaid_debt ?? 0);
 
-        $invoiceIds = (clone $query)->pluck('inbound_invoices.id');
-        $totalItemsQty = $invoiceIds->isEmpty()
+        $totalItemsQty = $invoiceCount === 0
             ? 0
-            : (int) InboundInvoiceItem::whereIn('inbound_invoice_id', $invoiceIds)->sum('quantity');
+            : (int) InboundInvoiceItem::query()
+                ->whereIn('inbound_invoice_id', (clone $query)->select('inbound_invoices.id'))
+                ->sum('quantity');
 
         return [
             Stat::make('Total Pembelian (Inbound)', 'Rp '.number_format($totalExpense, 0, ',', '.'))

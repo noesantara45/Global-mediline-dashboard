@@ -113,21 +113,8 @@
 <body>
 
     <?php
-        $kopPath = public_path('images/kop-surat.png');
-        $kopBase64 = null;
-        if (is_file($kopPath)) {
-            $kopData = file_get_contents($kopPath);
-            $kopType = mime_content_type($kopPath) ?: 'image/png';
-            $kopBase64 = 'data:' . $kopType . ';base64,' . base64_encode($kopData);
-        }
-
-        $wmPath = public_path('images/logo-gm-clear.png');
-        $wmBase64 = null;
-        if (is_file($wmPath)) {
-            $wmData = file_get_contents($wmPath);
-            $wmType = mime_content_type($wmPath) ?: 'image/png';
-            $wmBase64 = 'data:' . $wmType . ';base64,' . base64_encode($wmData);
-        }
+        $kopBase64 ??= \App\Http\Controllers\PdfController::cachedPublicImageBase64('images/kop-surat.png');
+        $wmBase64 ??= \App\Http\Controllers\PdfController::cachedPublicImageBase64('images/logo-gm-clear.png');
     ?>
 
     @if($wmBase64)
@@ -161,7 +148,7 @@
 
             <td><strong>Tanggal</strong></td>
             <td>:</td>
-            <td>{{ \Carbon\Carbon::parse($invoice->issue_date)->format('d M Y') }}</td>
+            <td>{{ $invoice->issue_date ? \Carbon\Carbon::parse($invoice->issue_date)->format('d M Y') : '-' }}</td>
         </tr>
         <tr>
             <td><strong>Alamat</strong></td>
@@ -170,7 +157,7 @@
 
             <td><strong>Jatuh Tempo</strong></td>
             <td>:</td>
-            <td>{{ \Carbon\Carbon::parse($invoice->due_date)->format('d M Y') }}</td>
+            <td>{{ $invoice->due_date ? \Carbon\Carbon::parse($invoice->due_date)->format('d M Y') : '-' }}</td>
         </tr>
         <tr>
             <td><strong>Status</strong></td>

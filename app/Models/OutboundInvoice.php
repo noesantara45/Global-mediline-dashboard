@@ -4,17 +4,33 @@ namespace App\Models;
 
 use App\Filament\Resources\InboundInvoiceResource;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OutboundInvoice extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'client_id',
+        'sales',
+        'division',
+        'pdf_file',
+        'invoice_number',
+        'issue_date',
+        'due_date',
+        'status',
+        'subtotal_amount',
+        'tax_amount',
+        'total_amount',
+        'paid_amount',
+        'notes',
+    ];
 
-    public function client()
+    public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
     }
 
-    public function items()
+    public function items(): HasMany
     {
         return $this->hasMany(OutboundInvoiceItem::class);
     }

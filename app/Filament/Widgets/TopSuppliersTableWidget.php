@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Pages\LaporanPembelian;
 use App\Filament\Resources\SupplierResource;
+use App\Models\InboundInvoice;
 use App\Models\Supplier;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -38,9 +39,17 @@ class TopSuppliersTableWidget extends BaseWidget
                 );
         };
 
+        $debtQuery = InboundInvoice::query()
+            ->whereColumn('inbound_invoices.supplier_id', 'suppliers.id')
+            ->whereIn('inbound_invoices.status', ['Unpaid', 'Partial'])
+            ->selectRaw('COALESCE(SUM(CASE WHEN inbound_invoices.total_amount > inbound_invoices.paid_amount THEN inbound_invoices.total_amount - inbound_invoices.paid_amount ELSE 0 END), 0)');
+        $invoiceConstraint($debtQuery);
+
         return $table
             ->query(
                 Supplier::query()
+                    ->select('suppliers.*')
+                    ->selectSub($debtQuery, 'remaining_debt')
                     ->whereHas('inboundInvoices', $invoiceConstraint)
                     ->withCount([
                         'inboundInvoices as invoice_count' => $invoiceConstraint,
@@ -108,7 +117,7 @@ class TopSuppliersTableWidget extends BaseWidget
 
                 Tables\Columns\TextColumn::make('remaining_debt')
                     ->label('Sisa Hutang')
-                    ->state(fn (Supplier $record): float => max(0, (float) ($record->total_expense ?? 0) - (float) ($record->total_paid ?? 0)))
+                    ->state(fn (Supplier $record): float => (float) ($record->remaining_debt ?? 0))
                     ->money('IDR', locale: 'id')
                     ->weight('bold')
                     ->color(fn (float $state): string => $state > 0 ? 'warning' : 'gray'),

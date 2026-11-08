@@ -40,13 +40,12 @@ class LaporanDetailPenjualan extends Page implements HasTable
                     ->with(['invoice.client', 'product'])
                     ->join('outbound_invoices', 'outbound_invoice_items.outbound_invoice_id', '=', 'outbound_invoices.id')
                     ->select('outbound_invoice_items.*')
-                    ->orderBy('outbound_invoices.issue_date', 'desc')
             )
             ->columns([
                 Tables\Columns\TextColumn::make('invoice.invoice_number')
                     ->label('No Faktur')
                     ->searchable()
-                    ->sortable()
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('outbound_invoices.invoice_number', $direction))
                     ->weight('bold')
                     ->copyable(),
 
@@ -59,7 +58,7 @@ class LaporanDetailPenjualan extends Page implements HasTable
                 Tables\Columns\TextColumn::make('invoice.issue_date')
                     ->label('Tanggal')
                     ->date('d M Y')
-                    ->sortable(),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('outbound_invoices.issue_date', $direction)),
 
                 Tables\Columns\TextColumn::make('item_name')
                     ->label('Nama Barang')
@@ -88,8 +87,12 @@ class LaporanDetailPenjualan extends Page implements HasTable
                     ->sortable()
                     ->alignCenter()
                     ->summarize(
-                        Tables\Columns\Summarizers\Sum::make()
+                        Tables\Columns\Summarizers\Sum::make('total_qty')
                             ->label('Total Qty')
+                            ->query(fn ($query) => $query->whereIn(
+                                'outbound_invoice_id',
+                                OutboundInvoice::query()->where('status', '!=', 'Cancelled')->select('id')
+                            ))
                     ),
 
                 Tables\Columns\TextColumn::make('unit')
@@ -118,8 +121,12 @@ class LaporanDetailPenjualan extends Page implements HasTable
                     ->weight('bold')
                     ->sortable()
                     ->summarize(
-                        Tables\Columns\Summarizers\Sum::make()
+                        Tables\Columns\Summarizers\Sum::make('grand_total')
                             ->label('Grand Total')
+                            ->query(fn ($query) => $query->whereIn(
+                                'outbound_invoice_id',
+                                OutboundInvoice::query()->where('status', '!=', 'Cancelled')->select('id')
+                            ))
                             ->money('IDR', locale: 'id')
                     ),
             ])
@@ -243,12 +250,27 @@ class LaporanDetailPenjualan extends Page implements HasTable
                         }
                     })
                     ->searchable(),
+
+                Tables\Filters\SelectFilter::make('status')
+                    ->label('Status Faktur')
+                    ->placeholder('Semua')
+                    ->options([
+                        'Unpaid' => 'Unpaid',
+                        'Partial' => 'Partial',
+                        'Paid' => 'Paid',
+                        'Cancelled' => 'Cancelled',
+                    ])
+                    ->query(function ($query, array $data): void {
+                        if (! empty($data['value'])) {
+                            $query->where('outbound_invoices.status', $data['value']);
+                        }
+                    }),
             ], layout: FiltersLayout::AboveContent)
             ->filtersFormColumns([
                 'default' => 1,
                 'sm' => 3,
                 'lg' => 4,
-                'xl' => 7,
+                'xl' => 8,
             ])
             ->actions([
                 Tables\Actions\Action::make('edit')
@@ -258,7 +280,8 @@ class LaporanDetailPenjualan extends Page implements HasTable
                     ->tooltip('Buka & Edit Faktur Penjualan')
                     ->url(fn (OutboundInvoiceItem $record): string => OutboundInvoiceResource::getUrl('edit', ['record' => $record->outbound_invoice_id])),
             ])
-            ->defaultSort('outbound_invoice_items.id', 'desc')
+            ->defaultSort('invoice.issue_date', 'desc')
+            ->defaultKeySort()
             ->striped();
     }
 }

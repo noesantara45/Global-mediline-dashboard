@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\ProductResource\Pages;
 
 use App\Filament\Resources\ProductResource;
+use App\Models\Product;
 use Filament\Actions;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -16,7 +18,18 @@ class EditProduct extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->before(function (Actions\DeleteAction $action, Product $record): void {
+                    if ($record->outboundItems()->exists() || $record->inboundItems()->exists()) {
+                        Notification::make()
+                            ->title('Tidak dapat menghapus produk')
+                            ->body('Produk ini sudah tercatat pada histori faktur sehingga tidak dapat dihapus.')
+                            ->danger()
+                            ->send();
+
+                        $action->cancel();
+                    }
+                }),
         ];
     }
 
@@ -58,7 +71,7 @@ class EditProduct extends EditRecord
     protected function syncAndCleanPhoto(string $photoPath, string $productName): string
     {
         $extension = pathinfo($photoPath, PATHINFO_EXTENSION) ?: 'png';
-        $cleanFilename = Str::slug($productName).'.'.strtolower($extension);
+        $cleanFilename = (Str::slug($productName) ?: 'produk').'.'.strtolower($extension);
 
         $disk = Storage::disk('public');
 
@@ -66,15 +79,17 @@ class EditProduct extends EditRecord
             $disk->copy($photoPath, $cleanFilename);
             $disk->copy($photoPath, 'products/'.$cleanFilename);
 
-            try {
-                $realPath = $disk->path($photoPath);
-                if (file_exists($realPath)) {
-                    $publicDir = public_path('images/products');
-                    File::ensureDirectoryExists($publicDir);
-                    File::copy($realPath, $publicDir.'/'.$cleanFilename);
+            if (! app()->runningUnitTests()) {
+                try {
+                    $realPath = $disk->path($photoPath);
+                    if (file_exists($realPath)) {
+                        $publicDir = public_path('images/products');
+                        File::ensureDirectoryExists($publicDir);
+                        File::copy($realPath, $publicDir.'/'.$cleanFilename);
+                    }
+                } catch (\Throwable $e) {
+                    // Ignore for virtual/fake test disks
                 }
-            } catch (\Throwable $e) {
-                // Ignore for virtual/fake test disks
             }
 
             if ($photoPath !== $cleanFilename && $photoPath !== 'products/'.$cleanFilename) {

@@ -25,14 +25,19 @@ class ListProducts extends ListRecords
      */
     public function getTabs(): array
     {
+        $counts = Product::query()
+            ->selectRaw('division, COUNT(*) as aggregate')
+            ->groupBy('division')
+            ->pluck('aggregate', 'division');
+
         $tabs = [
             'all' => Tab::make('Semua Divisi')
-                ->badge(fn (): int => Product::count()),
+                ->badge((int) $counts->sum()),
         ];
 
         foreach (Product::divisionOptions() as $divisionKey => $divisionLabel) {
             $tabs[$divisionKey] = Tab::make($divisionLabel)
-                ->badge(fn (): int => Product::where('division', $divisionKey)->count())
+                ->badge((int) ($counts[$divisionKey] ?? 0))
                 ->badgeColor(Product::divisionColor($divisionKey))
                 ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('division', $divisionKey));
         }

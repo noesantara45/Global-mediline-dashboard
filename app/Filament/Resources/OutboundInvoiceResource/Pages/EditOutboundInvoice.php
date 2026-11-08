@@ -33,10 +33,39 @@ class EditOutboundInvoice extends EditRecord
 
     protected function getRedirectUrl(): string
     {
-        if (filled($this->previousUrl) && ! str_contains($this->previousUrl, $this->getResource()::getUrl('edit', ['record' => $this->record]))) {
-            return $this->previousUrl;
+        $editUrl = $this->getResource()::getUrl('edit', ['record' => $this->record]);
+
+        if (
+            self::isSafeRedirectUrl($this->previousUrl) &&
+            ! str_contains((string) $this->previousUrl, $editUrl)
+        ) {
+            return (string) $this->previousUrl;
         }
 
         return $this->getResource()::getUrl('index');
+    }
+
+    public static function isSafeRedirectUrl(?string $url): bool
+    {
+        if (blank($url)) {
+            return false;
+        }
+
+        $trimmed = trim($url);
+
+        if (str_starts_with($trimmed, '/') && ! str_starts_with($trimmed, '//') && ! str_starts_with($trimmed, '/\\')) {
+            return true;
+        }
+
+        $appUrl = parse_url(url('/'));
+        $targetUrl = parse_url($trimmed);
+
+        if (! is_array($appUrl) || ! is_array($targetUrl) || empty($targetUrl['scheme']) || empty($targetUrl['host'])) {
+            return false;
+        }
+
+        return strtolower($targetUrl['scheme']) === strtolower((string) ($appUrl['scheme'] ?? ''))
+            && strtolower($targetUrl['host']) === strtolower((string) ($appUrl['host'] ?? ''))
+            && ($targetUrl['port'] ?? null) === ($appUrl['port'] ?? null);
     }
 }
